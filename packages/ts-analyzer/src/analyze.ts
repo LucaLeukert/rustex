@@ -1,6 +1,8 @@
 import fs from "node:fs";
 import path from "node:path";
-import { Data, Effect, Option, pipe } from "effect";
+import { CliConfig, Options } from "@effect/cli";
+import { BunContext, BunRuntime } from "@effect/platform-bun";
+import { Data, Effect, Layer, Option, pipe } from "effect";
 import ts from "typescript";
 
 type Severity = "error" | "warning" | "note";
@@ -206,39 +208,49 @@ const main = Effect.gen(function* () {
   ),
 );
 
-await Effect.runPromise(main);
+BunRuntime.runMain(
+  pipe(main, Effect.provide(Layer.mergeAll(CliConfig.defaultLayer, BunContext.layer))),
+);
 
 function parseCliArgs(argv: string[]) {
-  return Effect.try({
-    try: () => {
-      const values = new Map<string, string>();
-      for (let index = 0; index < argv.length; index += 2) {
-        const key = argv[index]?.replace(/^--/, "");
-        const value = argv[index + 1];
-        if (!key || !value) {
-          throw new AnalyzerError({
-            message: "expected --project-root <path> and --convex-root <path>",
-          });
-        }
-        values.set(key, value);
-      }
-      const projectRoot = values.get("project-root");
-      const convexRoot = values.get("convex-root");
-      if (!projectRoot || !convexRoot) {
+  const parser = Options.all({
+    projectRoot: pipe(
+      Options.text("project-root"),
+      Options.withAlias("p"),
+      Options.withDescription("Path to the analyzed project root"),
+    ),
+    convexRoot: pipe(
+      Options.text("convex-root"),
+      Options.withAlias("c"),
+      Options.withDescription("Path to the Convex root directory"),
+    ),
+  });
+
+  return pipe(
+    Options.processCommandLine(parser, argv, CliConfig.defaultConfig),
+    Effect.map(([validationError, leftover, parsed]) => {
+      if (Option.isSome(validationError)) {
         throw new AnalyzerError({
-          message: "missing required analyzer arguments",
+          message: "failed to parse analyzer CLI arguments",
+          cause: validationError.value,
+        });
+      }
+      if (leftover.length > 0) {
+        throw new AnalyzerError({
+          message: `unexpected positional arguments: ${leftover.join(" ")}`,
         });
       }
       return {
-        projectRoot: path.resolve(projectRoot),
-        convexRoot: path.resolve(convexRoot),
+        projectRoot: path.resolve(parsed.projectRoot),
+        convexRoot: path.resolve(parsed.convexRoot),
       };
-    },
-    catch: (cause) =>
+    }),
+    Effect.mapError((cause) =>
       cause instanceof AnalyzerError
         ? cause
         : new AnalyzerError({ message: "failed to parse CLI arguments", cause }),
-  });
+    ),
+  );
 }
 
 function parseTsConfig(convexRoot: string) {
