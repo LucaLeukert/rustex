@@ -1,0 +1,25 @@
+[package]
+name = "rustex"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+camino.workspace = true
+clap.workspace = true
+rustex-convex = { path = "../rustex-convex" }
+rustex-diagnostics = { path = "../rustex-diagnostics" }
+rustex-ir = { path = "../rustex-ir" }
+rustex-output = { path = "../rustex-output" }
+rustex-project = { path = "../rustex-project" }
+rustex-rustgen = { path = "../rustex-rustgen" }
+rustex-ts-analyzer = { path = "../rustex-ts-analyzer" }
+serde_json.workspace = true
+
+[[bin]]
+name = "rustex"
+path = "src/main.rs"
+
+[dev-dependencies]
+anyhow.workspace = true

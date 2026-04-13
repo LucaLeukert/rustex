@@ -1,0 +1,5 @@
+/target
+/node_modules
+/packages/ts-analyzer/node_modules
+/generated
+

@@ -1,0 +1,13 @@
+[package]
+name = "rustex-output"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+camino.workspace = true
+rustex-ir = { path = "../rustex-ir" }
+rustex-rustgen = { path = "../rustex-rustgen" }
+serde_json.workspace = true
+

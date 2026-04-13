@@ -1,0 +1,136 @@
+{
+  "project": {
+    "name": "basic-schema",
+    "root": "/Users/lucaleukert/src/rustex/fixtures/basic-schema",
+    "convex_root": "/Users/lucaleukert/src/rustex/fixtures/basic-schema/./convex",
+    "convex_version": null,
+    "generated_metadata_present": true
+  },
+  "tables": [
+    {
+      "name": "messages",
+      "doc_name": "MessagesDoc",
+      "document_type": {
+        "kind": "object",
+        "fields": [
+          {
+            "name": "author",
+            "required": true,
+            "type": {
+              "kind": "string"
+            },
+            "doc": null,
+            "source": {
+              "file": "/Users/lucaleukert/src/rustex/fixtures/basic-schema/convex/schema.ts",
+              "line": 6,
+              "column": 5
+            }
+          },
+          {
+            "name": "body",
+            "required": true,
+            "type": {
+              "kind": "string"
+            },
+            "doc": null,
+            "source": {
+              "file": "/Users/lucaleukert/src/rustex/fixtures/basic-schema/convex/schema.ts",
+              "line": 7,
+              "column": 5
+            }
+          }
+        ],
+        "open": false
+      },
+      "source": {
+        "file": "/Users/lucaleukert/src/rustex/fixtures/basic-schema/convex/schema.ts",
+        "line": 5,
+        "column": 3
+      }
+    }
+  ],
+  "functions": [
+    {
+      "canonical_path": "messages:add",
+      "module_path": "messages",
+      "export_name": "add",
+      "visibility": "public",
+      "kind": "mutation",
+      "args_type": {
+        "kind": "object",
+        "fields": [
+          {
+            "name": "author",
+            "required": true,
+            "type": {
+              "kind": "string"
+            },
+            "doc": null,
+            "source": {
+              "file": "/Users/lucaleukert/src/rustex/fixtures/basic-schema/convex/messages.ts",
+              "line": 5,
+              "column": 11
+            }
+          },
+          {
+            "name": "body",
+            "required": true,
+            "type": {
+              "kind": "string"
+            },
+            "doc": null,
+            "source": {
+              "file": "/Users/lucaleukert/src/rustex/fixtures/basic-schema/convex/messages.ts",
+              "line": 5,
+              "column": 31
+            }
+          }
+        ],
+        "open": false
+      },
+      "returns_type": null,
+      "contract_provenance": "missing",
+      "source": {
+        "file": "/Users/lucaleukert/src/rustex/fixtures/basic-schema/convex/messages.ts",
+        "line": 4,
+        "column": 14
+      }
+    },
+    {
+      "canonical_path": "messages:collect",
+      "module_path": "messages",
+      "export_name": "collect",
+      "visibility": "public",
+      "kind": "query",
+      "args_type": null,
+      "returns_type": null,
+      "contract_provenance": "missing",
+      "source": {
+        "file": "/Users/lucaleukert/src/rustex/fixtures/basic-schema/convex/messages.ts",
+        "line": 11,
+        "column": 14
+      }
+    }
+  ],
+  "diagnostics": [
+    {
+      "code": "RX010",
+      "severity": "warning",
+      "message": "Function collect has no args validator",
+      "symbol": "collect",
+      "provenance": "source",
+      "suggestion": "Add an args validator to enable request contract generation.",
+      "primary_span": {
+        "file": "/Users/lucaleukert/src/rustex/fixtures/basic-schema/convex/messages.ts",
+        "line": 11,
+        "column": 14
+      },
+      "related_spans": []
+    }
+  ],
+  "manifest_meta": {
+    "rustex_version": "0.1.0",
+    "manifest_version": 1,
+    "input_hash": "a0b6cfdb3574717c436754a18e07ada35e31327bca5ffb9a1c481d86b6b78aee"
+  }
+}

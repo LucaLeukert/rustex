@@ -1,0 +1,12 @@
+[package]
+name = "rustex-ir"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+camino.workspace = true
+rustex-diagnostics = { path = "../rustex-diagnostics" }
+serde.workspace = true
+serde_json.workspace = true
+
