@@ -1,9 +1,0 @@
-project_root = "."
-convex_root = "./convex"
-out_dir = "./generated/rustex"
-emit = ["rust", "manifest", "ir"]
-strict = false
-allow_inferred_returns = false
-naming_strategy = "safe"
-id_style = "newtype_per_table"
-

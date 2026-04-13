@@ -7,7 +7,7 @@ contains the MVP compiler pipeline:
 - Node/TypeScript analyzer sidecar for statically reading Convex source
 - Rust output generation for document models, ids, and request/response types
 - JSON IR, manifest, and diagnostics output
-- Fixture-backed smoke test
+- Smoke test that builds a temporary fixture from the repo's example `convex/` app
 
 ## Commands
 
@@ -15,7 +15,6 @@ contains the MVP compiler pipeline:
 cargo run -- generate
 cargo run -- check
 cargo run -- inspect functions --format json
-cargo run -- --project fixtures/basic-schema generate
 ```
 
 ## Current MVP limits
@@ -30,6 +29,4 @@ cargo run -- --project fixtures/basic-schema generate
 
 - `crates/` Rust workspace crates
 - `packages/ts-analyzer/` Node analyzer worker
-- `convex/` example Convex app used as the first local integration target
-- `fixtures/` isolated test projects
-
+- `convex/` example Convex app used as the local integration target and test seed

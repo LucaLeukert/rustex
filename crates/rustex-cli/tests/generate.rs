@@ -6,12 +6,14 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 #[test]
 fn generates_outputs_for_basic_fixture() -> Result<()> {
-    let fixture = workspace_root().join("fixtures/basic-schema");
+    let root = workspace_root();
     let temp = std::env::temp_dir().join(format!(
         "rustex-fixture-{}",
         SystemTime::now().duration_since(UNIX_EPOCH)?.as_millis()
     ));
-    copy_dir(&fixture, &temp)?;
+    fs::create_dir_all(&temp)?;
+    copy_dir(&root.join("convex"), &temp.join("convex"))?;
+    fs::write(temp.join("rustex.toml"), fixture_config())?;
 
     let status = Command::new(env!("CARGO_BIN_EXE_rustex"))
         .arg("--project")
@@ -50,4 +52,16 @@ fn copy_dir(from: &Path, to: &Path) -> Result<()> {
         }
     }
     Ok(())
+}
+
+fn fixture_config() -> &'static str {
+    r#"project_root = "."
+convex_root = "./convex"
+out_dir = "./generated/rustex"
+emit = ["rust", "manifest", "ir"]
+strict = false
+allow_inferred_returns = false
+naming_strategy = "safe"
+id_style = "newtype_per_table"
+"#
 }

@@ -31,3 +31,6 @@ analyzable subset of Convex validators:
 
 Unsupported or lossy surfaces are emitted as diagnostics rather than silently
 invented as precise contracts.
+
+Tests synthesize temporary fixture projects from the repository's root `convex/`
+example instead of storing duplicate committed Convex app copies.
