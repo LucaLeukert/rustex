@@ -6,10 +6,11 @@ use std::process::Command;
 pub fn analyze(project_root: &Utf8Path, convex_root: &Utf8Path) -> Result<IrPackage> {
     let manifest_dir = Utf8Path::new(env!("CARGO_MANIFEST_DIR"));
     let script = manifest_dir
-        .join("../../packages/ts-analyzer/src/analyze.mjs")
+        .join("../../packages/ts-analyzer/src/analyze.ts")
         .canonicalize_utf8()
         .with_context(|| "failed to resolve analyzer script path")?;
-    let output = Command::new("node")
+    let output = Command::new("bun")
+        .arg("run")
         .arg(script.as_str())
         .arg("--project-root")
         .arg(project_root.as_str())

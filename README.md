@@ -4,7 +4,7 @@ Rustex is a Convex -> Rust code generation toolkit. This repository currently
 contains the MVP compiler pipeline:
 
 - Rust workspace with IR, diagnostics, project discovery, codegen, and CLI
-- Node/TypeScript analyzer sidecar for statically reading Convex source
+- Bun-run TypeScript analyzer sidecar for statically reading Convex source
 - Rust output generation for document models, ids, and request/response types
 - JSON IR, manifest, and diagnostics output
 - Smoke test that builds a temporary fixture from the repo's example `convex/` app
@@ -15,6 +15,7 @@ contains the MVP compiler pipeline:
 cargo run -- generate
 cargo run -- check
 cargo run -- inspect functions --format json
+cd packages/ts-analyzer && bun run check
 ```
 
 ## Current MVP limits
