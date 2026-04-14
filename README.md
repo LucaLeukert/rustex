@@ -1,11 +1,58 @@
 # Rustex
 
-Rustex is a Convex -> Rust code generation toolkit. The project goal is to
-analyze as much of a Convex codebase as can be derived statically, normalize it
-into a backend-neutral intermediate representation, and generate deterministic
-Rust artifacts plus machine-readable manifests for future targets.
+Rustex is a monorepo for bringing Convex-grade end-to-end type safety to Rust.
+It has two core responsibilities:
+
+- analyze a Convex TypeScript app and generate Rust API/model bindings
+- provide a runtime crate that uses those generated bindings to make the Rust
+  Convex client type-safe
+
+The goal is not just “Rust codegen”. The goal is a Rust developer experience
+closer to the Convex TypeScript SDK, where function names, argument shapes, and
+response types flow through the client API instead of living as unchecked
+strings and untyped values.
 
 This README is the shared project plan and implementation tracker.
+
+## Concrete Runtime Goal
+
+Today, raw Convex Rust calls look like this:
+
+```rust
+let result = client.query("tasks:get", BTreeMap::new()).await?;
+```
+
+That is not safe because:
+
+- `"tasks:get"` is just a string
+- the argument shape is unchecked
+- the return type is not encoded in the call site
+
+Rustex should generate and support calls like this instead:
+
+```rust
+use rustex_runtime::TypedConvexClient;
+use rustex_generated::api::messages;
+
+let mut client = TypedConvexClient::new(&deployment_url).await?;
+let result = client
+    .mutation(
+        messages::add(),
+        &messages::AddArgs {
+            author: "alice".into(),
+            body: "hello".into(),
+        },
+    )
+    .await?;
+```
+
+In that model:
+
+- the function path comes from generated code
+- the args type is tied to that function
+- the output type is tied to that function
+- unsupported or unknown contracts still degrade explicitly to `serde_json::Value`
+  instead of pretending to be strongly typed
 
 ## Vision
 
@@ -13,7 +60,8 @@ Rustex should become a production-grade compiler/codegen toolchain for Convex
 applications, with:
 
 - database document generation from Convex schema validators
-- request/response contract generation for queries, mutations, and actions
+- generated typed function specs for queries, mutations, and actions
+- a runtime wrapper around the official `convex` crate
 - internal function support where static analysis can recover contracts
 - robust IR and manifest output for debugging, CI, and future backends
 - deterministic Rust code generation with serde-friendly types
@@ -28,7 +76,9 @@ applications, with:
 - Validator-driven extraction for args and returns
 - Basic generated metadata consumption from `convex/_generated/*.d.ts`
 - IR snapshot, manifest output, diagnostics output
-- Rust generation for ids, document models, and API request/response contracts
+- Rust generation for ids, document models, API request/response contracts, and
+  typed function descriptors
+- Runtime crate with a typed wrapper over `convex::ConvexClient`
 - CLI commands for `generate`, `check`, `inspect`, and `diff`
 
 ### v2
@@ -83,6 +133,7 @@ Policy:
 - `crates/rustex-convex`: IR finalization and hashing
 - `crates/rustex-ir`: language-agnostic IR model
 - `crates/rustex-diagnostics`: structured diagnostics model
+- `crates/rustex-runtime`: typed runtime wrapper over the official Rust Convex client
 - `crates/rustex-rustgen`: Rust code generation backend
 - `crates/rustex-output`: deterministic artifact writing
 - `crates/rustex-testkit`: shared test utilities
@@ -96,7 +147,8 @@ Policy:
 4. Parse schema validators and exported Convex function registrations.
 5. Normalize extracted shapes into IR.
 6. Finalize and hash the IR deterministically.
-7. Emit Rust code, IR JSON, manifest JSON, and diagnostics JSON.
+7. Emit Rust code, including typed function specs consumed by the runtime crate.
+8. Emit IR JSON, manifest JSON, and diagnostics JSON.
 
 ### IR model
 
@@ -121,7 +173,7 @@ The Rust backend currently emits:
 - `lib.rs`
 - `ids.rs`
 - `models.rs`
-- `api.rs`
+- `api.rs` with typed function specs
 
 Current mapping policy:
 
@@ -131,6 +183,26 @@ Current mapping policy:
 - `v.record(v.string(), T)` -> `BTreeMap<String, T>`
 - nullable unions of the form `T | null` -> `Option<T>`
 - unsupported or ambiguous shapes -> `serde_json::Value`
+
+Current generated API policy:
+
+- each Convex module becomes a Rust submodule inside `api`
+- each function gets a zero-sized generated marker type
+- each function marker implements a runtime trait such as `QuerySpec`,
+  `MutationSpec`, or `ActionSpec`
+- args/output types are attached to the function marker through trait
+  associated types
+
+### Runtime
+
+`rustex-runtime` wraps the official `convex` crate and provides:
+
+- `TypedConvexClient`
+- `FunctionSpec`, `QuerySpec`, `MutationSpec`, `ActionSpec`
+- argument serialization into `convex::Value`
+- typed response decoding from `convex::FunctionResult`
+- explicit runtime errors for transport issues, function errors, invalid arg
+  encoding, and deserialization failures
 
 ## CLI
 
@@ -167,6 +239,7 @@ Config file:
 - [x] Top-level `rustex.toml`
 - [x] Bun-based analyzer package
 - [x] Example `convex/` app in the repo root
+- [x] Monorepo runtime crate
 
 ### CLI and orchestration
 
@@ -251,6 +324,8 @@ Config file:
 - [x] document model generation
 - [x] request argument struct generation
 - [x] response alias generation
+- [x] generated module-scoped function descriptors
+- [x] generated runtime trait impls for function descriptors
 - [x] serde derives
 - [x] basic field renaming to snake_case
 - [x] `Option<T>` for optional/null unions when recognized
@@ -276,6 +351,7 @@ Config file:
 - [x] `rustex.ir.json`
 - [x] `rustex.manifest.json`
 - [x] `rustex.diagnostics.json`
+- [x] generated runtime-facing typed API surface
 - [ ] source maps for generated symbol -> origin
 - [ ] JSON Schema output
 - [ ] OpenAPI-like output
@@ -285,6 +361,8 @@ Config file:
 - [x] end-to-end smoke test driven by the root `convex/` example app
 - [x] analyzer typecheck with Bun
 - [x] `cargo test`
+- [x] runtime conversion tests
+- [x] smoke test coverage for generated typed API descriptors
 - [ ] golden tests for generated files
 - [ ] broader fixture corpus
 - [ ] compatibility matrix across Convex versions
@@ -298,14 +376,17 @@ Config file:
 - Generated metadata is detected and version-tagged, but not deeply reconciled
 - Object and union codegen is intentionally conservative and still falls back to `serde_json::Value`
 - No stable public customization surface yet
+- The runtime can only be as type-safe as the extracted/generated contracts
 
 ## Near-Term Priorities
 
 1. Reconcile against `convex/_generated/*.d.ts` instead of only detecting them.
-2. Replace lossy Rust fallbacks for literal unions and nested objects with named types.
-3. Add golden tests and compile-check tests for generated Rust output.
-4. Expand diagnostics to cover more unsupported and partial-generation cases.
-5. Add watch mode and incremental analyzer caching.
+2. Replace lossy Rust fallbacks for literal unions, nested objects, and returns
+   with named types.
+3. Expand the runtime surface to cover subscriptions and query sets safely.
+4. Add golden tests and compile-check tests for generated Rust output.
+5. Expand diagnostics to cover more unsupported and partial-generation cases.
+6. Add watch mode and incremental analyzer caching.
 
 ## Repository Notes
 

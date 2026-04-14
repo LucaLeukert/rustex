@@ -29,6 +29,11 @@ fn generates_outputs_for_basic_fixture() -> Result<()> {
     assert!(models.contains("pub struct MessagesDoc"));
     assert!(models.contains("pub author: String"));
 
+    let api = fs::read_to_string(temp.join("generated/rustex/rust/api.rs"))?;
+    assert!(api.contains("pub mod messages"));
+    assert!(api.contains("impl MutationSpec for Add"));
+    assert!(api.contains("const PATH: &'static str = \"messages:add\""));
+
     Ok(())
 }
 
