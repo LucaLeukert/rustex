@@ -124,9 +124,9 @@
               },
               "doc": null,
               "source": {
-                "file": "/Users/lucaleukert/src/rustex/example/convex/messages.ts",
-                "line": 19,
-                "column": 29
+                "file": "/Users/lucaleukert/src/rustex/example/convex/schema.ts",
+                "line": 5,
+                "column": 3
               }
             },
             {
@@ -137,9 +137,9 @@
               },
               "doc": null,
               "source": {
-                "file": "/Users/lucaleukert/src/rustex/example/convex/messages.ts",
-                "line": 12,
-                "column": 25
+                "file": "/Users/lucaleukert/src/rustex/example/convex/schema.ts",
+                "line": 5,
+                "column": 3
               }
             },
             {
@@ -150,9 +150,9 @@
               },
               "doc": null,
               "source": {
-                "file": "/Users/lucaleukert/src/rustex/example/convex/messages.ts",
-                "line": 1,
-                "column": 1
+                "file": "/Users/lucaleukert/src/rustex/example/convex/schema.ts",
+                "line": 6,
+                "column": 5
               }
             },
             {
@@ -163,9 +163,9 @@
               },
               "doc": null,
               "source": {
-                "file": "/Users/lucaleukert/src/rustex/example/convex/messages.ts",
-                "line": 1,
-                "column": 1
+                "file": "/Users/lucaleukert/src/rustex/example/convex/schema.ts",
+                "line": 7,
+                "column": 5
               }
             }
           ],
@@ -176,244 +176,6 @@
       "source": {
         "file": "/Users/lucaleukert/src/rustex/example/convex/messages.ts",
         "line": 11,
-        "column": 14
-      }
-    },
-    {
-      "canonical_path": "messages:findByAuthor",
-      "module_path": "messages",
-      "export_name": "findByAuthor",
-      "component_path": null,
-      "visibility": "public",
-      "kind": "query",
-      "args_type": {
-        "kind": "object",
-        "fields": [
-          {
-            "name": "author",
-            "required": true,
-            "type": {
-              "kind": "string"
-            },
-            "doc": null,
-            "source": {
-              "file": "/Users/lucaleukert/src/rustex/example/convex/messages.ts",
-              "line": 18,
-              "column": 11
-            }
-          }
-        ],
-        "open": false
-      },
-      "returns_type": {
-        "kind": "array",
-        "element": {
-          "kind": "object",
-          "fields": [
-            {
-              "name": "_id",
-              "required": true,
-              "type": {
-                "kind": "id",
-                "table": "messages"
-              },
-              "doc": null,
-              "source": {
-                "file": "/Users/lucaleukert/src/rustex/example/convex/messages.ts",
-                "line": 19,
-                "column": 29
-              }
-            },
-            {
-              "name": "_creationTime",
-              "required": true,
-              "type": {
-                "kind": "float64"
-              },
-              "doc": null,
-              "source": {
-                "file": "/Users/lucaleukert/src/rustex/example/convex/messages.ts",
-                "line": 12,
-                "column": 25
-              }
-            },
-            {
-              "name": "author",
-              "required": true,
-              "type": {
-                "kind": "string"
-              },
-              "doc": null,
-              "source": {
-                "file": "/Users/lucaleukert/src/rustex/example/convex/messages.ts",
-                "line": 1,
-                "column": 1
-              }
-            },
-            {
-              "name": "body",
-              "required": true,
-              "type": {
-                "kind": "string"
-              },
-              "doc": null,
-              "source": {
-                "file": "/Users/lucaleukert/src/rustex/example/convex/messages.ts",
-                "line": 1,
-                "column": 1
-              }
-            }
-          ],
-          "open": false
-        }
-      },
-      "contract_provenance": "inferred",
-      "source": {
-        "file": "/Users/lucaleukert/src/rustex/example/convex/messages.ts",
-        "line": 17,
-        "column": 14
-      }
-    },
-    {
-      "canonical_path": "messages:multiReturnDemo",
-      "module_path": "messages",
-      "export_name": "multiReturnDemo",
-      "component_path": null,
-      "visibility": "public",
-      "kind": "query",
-      "args_type": null,
-      "returns_type": {
-        "kind": "union",
-        "members": [
-          {
-            "kind": "object",
-            "fields": [
-              {
-                "name": "error",
-                "required": true,
-                "type": {
-                  "kind": "string"
-                },
-                "doc": null,
-                "source": {
-                  "file": "/Users/lucaleukert/src/rustex/example/convex/messages.ts",
-                  "line": 32,
-                  "column": 16
-                }
-              }
-            ],
-            "open": false
-          },
-          {
-            "kind": "object",
-            "fields": [
-              {
-                "name": "messages",
-                "required": true,
-                "type": {
-                  "kind": "array",
-                  "element": {
-                    "kind": "object",
-                    "fields": [
-                      {
-                        "name": "_id",
-                        "required": true,
-                        "type": {
-                          "kind": "id",
-                          "table": "messages"
-                        },
-                        "doc": null,
-                        "source": {
-                          "file": "/Users/lucaleukert/src/rustex/example/convex/messages.ts",
-                          "line": 19,
-                          "column": 29
-                        }
-                      },
-                      {
-                        "name": "_creationTime",
-                        "required": true,
-                        "type": {
-                          "kind": "float64"
-                        },
-                        "doc": null,
-                        "source": {
-                          "file": "/Users/lucaleukert/src/rustex/example/convex/messages.ts",
-                          "line": 12,
-                          "column": 25
-                        }
-                      },
-                      {
-                        "name": "author",
-                        "required": true,
-                        "type": {
-                          "kind": "string"
-                        },
-                        "doc": null,
-                        "source": {
-                          "file": "/Users/lucaleukert/src/rustex/example/convex/messages.ts",
-                          "line": 1,
-                          "column": 1
-                        }
-                      },
-                      {
-                        "name": "body",
-                        "required": true,
-                        "type": {
-                          "kind": "string"
-                        },
-                        "doc": null,
-                        "source": {
-                          "file": "/Users/lucaleukert/src/rustex/example/convex/messages.ts",
-                          "line": 1,
-                          "column": 1
-                        }
-                      }
-                    ],
-                    "open": false
-                  }
-                },
-                "doc": null,
-                "source": {
-                  "file": "/Users/lucaleukert/src/rustex/example/convex/messages.ts",
-                  "line": 34,
-                  "column": 14
-                }
-              },
-              {
-                "name": "count",
-                "required": true,
-                "type": {
-                  "kind": "float64"
-                },
-                "doc": null,
-                "source": {
-                  "file": "/Users/lucaleukert/src/rustex/example/convex/messages.ts",
-                  "line": 34,
-                  "column": 24
-                }
-              },
-              {
-                "name": "error",
-                "required": true,
-                "type": {
-                  "kind": "string"
-                },
-                "doc": null,
-                "source": {
-                  "file": "/Users/lucaleukert/src/rustex/example/convex/messages.ts",
-                  "line": 34,
-                  "column": 31
-                }
-              }
-            ],
-            "open": false
-          }
-        ]
-      },
-      "contract_provenance": "inferred",
-      "source": {
-        "file": "/Users/lucaleukert/src/rustex/example/convex/messages.ts",
-        "line": 27,
         "column": 14
       }
     }
@@ -477,9 +239,9 @@
             },
             "doc": null,
             "source": {
-              "file": "/Users/lucaleukert/src/rustex/example/convex/messages.ts",
-              "line": 19,
-              "column": 29
+              "file": "/Users/lucaleukert/src/rustex/example/convex/schema.ts",
+              "line": 5,
+              "column": 3
             }
           },
           {
@@ -490,9 +252,9 @@
             },
             "doc": null,
             "source": {
-              "file": "/Users/lucaleukert/src/rustex/example/convex/messages.ts",
-              "line": 12,
-              "column": 25
+              "file": "/Users/lucaleukert/src/rustex/example/convex/schema.ts",
+              "line": 5,
+              "column": 3
             }
           },
           {
@@ -503,9 +265,9 @@
             },
             "doc": null,
             "source": {
-              "file": "/Users/lucaleukert/src/rustex/example/convex/messages.ts",
-              "line": 1,
-              "column": 1
+              "file": "/Users/lucaleukert/src/rustex/example/convex/schema.ts",
+              "line": 6,
+              "column": 5
             }
           },
           {
@@ -516,9 +278,9 @@
             },
             "doc": null,
             "source": {
-              "file": "/Users/lucaleukert/src/rustex/example/convex/messages.ts",
-              "line": 1,
-              "column": 1
+              "file": "/Users/lucaleukert/src/rustex/example/convex/schema.ts",
+              "line": 7,
+              "column": 5
             }
           }
         ],
@@ -527,454 +289,6 @@
       "source": {
         "file": "/Users/lucaleukert/src/rustex/example/convex/messages.ts",
         "line": 11,
-        "column": 14
-      }
-    },
-    {
-      "key": "function.messages:findByAuthor.args",
-      "suggested_name": "FindByAuthorArgs",
-      "origin_symbol": "function.messages:findByAuthor.args",
-      "node": {
-        "kind": "object",
-        "fields": [
-          {
-            "name": "author",
-            "required": true,
-            "type": {
-              "kind": "string"
-            },
-            "doc": null,
-            "source": {
-              "file": "/Users/lucaleukert/src/rustex/example/convex/messages.ts",
-              "line": 18,
-              "column": 11
-            }
-          }
-        ],
-        "open": false
-      },
-      "source": {
-        "file": "/Users/lucaleukert/src/rustex/example/convex/messages.ts",
-        "line": 17,
-        "column": 14
-      }
-    },
-    {
-      "key": "function.messages:findByAuthor.returns.item",
-      "suggested_name": "FindByAuthorResponseItem",
-      "origin_symbol": "function.messages:findByAuthor.returns.item",
-      "node": {
-        "kind": "object",
-        "fields": [
-          {
-            "name": "_id",
-            "required": true,
-            "type": {
-              "kind": "id",
-              "table": "messages"
-            },
-            "doc": null,
-            "source": {
-              "file": "/Users/lucaleukert/src/rustex/example/convex/messages.ts",
-              "line": 19,
-              "column": 29
-            }
-          },
-          {
-            "name": "_creationTime",
-            "required": true,
-            "type": {
-              "kind": "float64"
-            },
-            "doc": null,
-            "source": {
-              "file": "/Users/lucaleukert/src/rustex/example/convex/messages.ts",
-              "line": 12,
-              "column": 25
-            }
-          },
-          {
-            "name": "author",
-            "required": true,
-            "type": {
-              "kind": "string"
-            },
-            "doc": null,
-            "source": {
-              "file": "/Users/lucaleukert/src/rustex/example/convex/messages.ts",
-              "line": 1,
-              "column": 1
-            }
-          },
-          {
-            "name": "body",
-            "required": true,
-            "type": {
-              "kind": "string"
-            },
-            "doc": null,
-            "source": {
-              "file": "/Users/lucaleukert/src/rustex/example/convex/messages.ts",
-              "line": 1,
-              "column": 1
-            }
-          }
-        ],
-        "open": false
-      },
-      "source": {
-        "file": "/Users/lucaleukert/src/rustex/example/convex/messages.ts",
-        "line": 17,
-        "column": 14
-      }
-    },
-    {
-      "key": "function.messages:multiReturnDemo.returns",
-      "suggested_name": "MultiReturnDemoResponse",
-      "origin_symbol": "function.messages:multiReturnDemo.returns",
-      "node": {
-        "kind": "union",
-        "members": [
-          {
-            "kind": "object",
-            "fields": [
-              {
-                "name": "error",
-                "required": true,
-                "type": {
-                  "kind": "string"
-                },
-                "doc": null,
-                "source": {
-                  "file": "/Users/lucaleukert/src/rustex/example/convex/messages.ts",
-                  "line": 32,
-                  "column": 16
-                }
-              }
-            ],
-            "open": false
-          },
-          {
-            "kind": "object",
-            "fields": [
-              {
-                "name": "messages",
-                "required": true,
-                "type": {
-                  "kind": "array",
-                  "element": {
-                    "kind": "object",
-                    "fields": [
-                      {
-                        "name": "_id",
-                        "required": true,
-                        "type": {
-                          "kind": "id",
-                          "table": "messages"
-                        },
-                        "doc": null,
-                        "source": {
-                          "file": "/Users/lucaleukert/src/rustex/example/convex/messages.ts",
-                          "line": 19,
-                          "column": 29
-                        }
-                      },
-                      {
-                        "name": "_creationTime",
-                        "required": true,
-                        "type": {
-                          "kind": "float64"
-                        },
-                        "doc": null,
-                        "source": {
-                          "file": "/Users/lucaleukert/src/rustex/example/convex/messages.ts",
-                          "line": 12,
-                          "column": 25
-                        }
-                      },
-                      {
-                        "name": "author",
-                        "required": true,
-                        "type": {
-                          "kind": "string"
-                        },
-                        "doc": null,
-                        "source": {
-                          "file": "/Users/lucaleukert/src/rustex/example/convex/messages.ts",
-                          "line": 1,
-                          "column": 1
-                        }
-                      },
-                      {
-                        "name": "body",
-                        "required": true,
-                        "type": {
-                          "kind": "string"
-                        },
-                        "doc": null,
-                        "source": {
-                          "file": "/Users/lucaleukert/src/rustex/example/convex/messages.ts",
-                          "line": 1,
-                          "column": 1
-                        }
-                      }
-                    ],
-                    "open": false
-                  }
-                },
-                "doc": null,
-                "source": {
-                  "file": "/Users/lucaleukert/src/rustex/example/convex/messages.ts",
-                  "line": 34,
-                  "column": 14
-                }
-              },
-              {
-                "name": "count",
-                "required": true,
-                "type": {
-                  "kind": "float64"
-                },
-                "doc": null,
-                "source": {
-                  "file": "/Users/lucaleukert/src/rustex/example/convex/messages.ts",
-                  "line": 34,
-                  "column": 24
-                }
-              },
-              {
-                "name": "error",
-                "required": true,
-                "type": {
-                  "kind": "string"
-                },
-                "doc": null,
-                "source": {
-                  "file": "/Users/lucaleukert/src/rustex/example/convex/messages.ts",
-                  "line": 34,
-                  "column": 31
-                }
-              }
-            ],
-            "open": false
-          }
-        ]
-      },
-      "source": {
-        "file": "/Users/lucaleukert/src/rustex/example/convex/messages.ts",
-        "line": 27,
-        "column": 14
-      }
-    },
-    {
-      "key": "function.messages:multiReturnDemo.returns.variant0",
-      "suggested_name": "MultiReturnDemoResponseVariant1",
-      "origin_symbol": "function.messages:multiReturnDemo.returns.variant0",
-      "node": {
-        "kind": "object",
-        "fields": [
-          {
-            "name": "error",
-            "required": true,
-            "type": {
-              "kind": "string"
-            },
-            "doc": null,
-            "source": {
-              "file": "/Users/lucaleukert/src/rustex/example/convex/messages.ts",
-              "line": 32,
-              "column": 16
-            }
-          }
-        ],
-        "open": false
-      },
-      "source": {
-        "file": "/Users/lucaleukert/src/rustex/example/convex/messages.ts",
-        "line": 27,
-        "column": 14
-      }
-    },
-    {
-      "key": "function.messages:multiReturnDemo.returns.variant1",
-      "suggested_name": "MultiReturnDemoResponseVariant2",
-      "origin_symbol": "function.messages:multiReturnDemo.returns.variant1",
-      "node": {
-        "kind": "object",
-        "fields": [
-          {
-            "name": "messages",
-            "required": true,
-            "type": {
-              "kind": "array",
-              "element": {
-                "kind": "object",
-                "fields": [
-                  {
-                    "name": "_id",
-                    "required": true,
-                    "type": {
-                      "kind": "id",
-                      "table": "messages"
-                    },
-                    "doc": null,
-                    "source": {
-                      "file": "/Users/lucaleukert/src/rustex/example/convex/messages.ts",
-                      "line": 19,
-                      "column": 29
-                    }
-                  },
-                  {
-                    "name": "_creationTime",
-                    "required": true,
-                    "type": {
-                      "kind": "float64"
-                    },
-                    "doc": null,
-                    "source": {
-                      "file": "/Users/lucaleukert/src/rustex/example/convex/messages.ts",
-                      "line": 12,
-                      "column": 25
-                    }
-                  },
-                  {
-                    "name": "author",
-                    "required": true,
-                    "type": {
-                      "kind": "string"
-                    },
-                    "doc": null,
-                    "source": {
-                      "file": "/Users/lucaleukert/src/rustex/example/convex/messages.ts",
-                      "line": 1,
-                      "column": 1
-                    }
-                  },
-                  {
-                    "name": "body",
-                    "required": true,
-                    "type": {
-                      "kind": "string"
-                    },
-                    "doc": null,
-                    "source": {
-                      "file": "/Users/lucaleukert/src/rustex/example/convex/messages.ts",
-                      "line": 1,
-                      "column": 1
-                    }
-                  }
-                ],
-                "open": false
-              }
-            },
-            "doc": null,
-            "source": {
-              "file": "/Users/lucaleukert/src/rustex/example/convex/messages.ts",
-              "line": 34,
-              "column": 14
-            }
-          },
-          {
-            "name": "count",
-            "required": true,
-            "type": {
-              "kind": "float64"
-            },
-            "doc": null,
-            "source": {
-              "file": "/Users/lucaleukert/src/rustex/example/convex/messages.ts",
-              "line": 34,
-              "column": 24
-            }
-          },
-          {
-            "name": "error",
-            "required": true,
-            "type": {
-              "kind": "string"
-            },
-            "doc": null,
-            "source": {
-              "file": "/Users/lucaleukert/src/rustex/example/convex/messages.ts",
-              "line": 34,
-              "column": 31
-            }
-          }
-        ],
-        "open": false
-      },
-      "source": {
-        "file": "/Users/lucaleukert/src/rustex/example/convex/messages.ts",
-        "line": 27,
-        "column": 14
-      }
-    },
-    {
-      "key": "function.messages:multiReturnDemo.returns.variant1.messages.item",
-      "suggested_name": "MultiReturnDemoResponseVariant2MessagesItem",
-      "origin_symbol": "function.messages:multiReturnDemo.returns.variant1.messages.item",
-      "node": {
-        "kind": "object",
-        "fields": [
-          {
-            "name": "_id",
-            "required": true,
-            "type": {
-              "kind": "id",
-              "table": "messages"
-            },
-            "doc": null,
-            "source": {
-              "file": "/Users/lucaleukert/src/rustex/example/convex/messages.ts",
-              "line": 19,
-              "column": 29
-            }
-          },
-          {
-            "name": "_creationTime",
-            "required": true,
-            "type": {
-              "kind": "float64"
-            },
-            "doc": null,
-            "source": {
-              "file": "/Users/lucaleukert/src/rustex/example/convex/messages.ts",
-              "line": 12,
-              "column": 25
-            }
-          },
-          {
-            "name": "author",
-            "required": true,
-            "type": {
-              "kind": "string"
-            },
-            "doc": null,
-            "source": {
-              "file": "/Users/lucaleukert/src/rustex/example/convex/messages.ts",
-              "line": 1,
-              "column": 1
-            }
-          },
-          {
-            "name": "body",
-            "required": true,
-            "type": {
-              "kind": "string"
-            },
-            "doc": null,
-            "source": {
-              "file": "/Users/lucaleukert/src/rustex/example/convex/messages.ts",
-              "line": 1,
-              "column": 1
-            }
-          }
-        ],
-        "open": false
-      },
-      "source": {
-        "file": "/Users/lucaleukert/src/rustex/example/convex/messages.ts",
-        "line": 34,
         "column": 14
       }
     },
@@ -1029,16 +343,6 @@
     },
     {
       "path": "function.messages:collect.returns.item._id",
-      "kind": "identifier_table",
-      "detail": "messages"
-    },
-    {
-      "path": "function.messages:findByAuthor.returns.item._id",
-      "kind": "identifier_table",
-      "detail": "messages"
-    },
-    {
-      "path": "function.messages:multiReturnDemo.returns.variant1.messages.item._id",
       "kind": "identifier_table",
       "detail": "messages"
     }
@@ -1128,51 +432,6 @@
       "snippet": "export const collect = query({\n  handler: async (ctx) => {\n    return await ctx.db.query(\"messages\").collect();"
     },
     {
-      "code": "RX022",
-      "severity": "warning",
-      "message": "Function findByAuthor has no returns validator; inferring response contract from the TypeScript checker",
-      "symbol": "findByAuthor",
-      "provenance": "inferred",
-      "suggestion": "Add a returns validator to make the inferred contract explicit and stable.",
-      "primary_span": {
-        "file": "/Users/lucaleukert/src/rustex/example/convex/messages.ts",
-        "line": 17,
-        "column": 14
-      },
-      "related_spans": [],
-      "snippet": "export const findByAuthor = query({\n  args: { author: v.string() },\n  handler: async (ctx, { author }) => {"
-    },
-    {
-      "code": "RX010",
-      "severity": "warning",
-      "message": "Function multiReturnDemo has no args validator",
-      "symbol": "multiReturnDemo",
-      "provenance": "source",
-      "suggestion": "Add an args validator to enable request contract generation.",
-      "primary_span": {
-        "file": "/Users/lucaleukert/src/rustex/example/convex/messages.ts",
-        "line": 27,
-        "column": 14
-      },
-      "related_spans": [],
-      "snippet": "export const multiReturnDemo = query({\n  handler: async (ctx) => {\n    const messages = await ctx.db.query(\"messages\").collect();"
-    },
-    {
-      "code": "RX022",
-      "severity": "warning",
-      "message": "Function multiReturnDemo has no returns validator; inferring response contract from the TypeScript checker",
-      "symbol": "multiReturnDemo",
-      "provenance": "inferred",
-      "suggestion": "Add a returns validator to make the inferred contract explicit and stable.",
-      "primary_span": {
-        "file": "/Users/lucaleukert/src/rustex/example/convex/messages.ts",
-        "line": 27,
-        "column": 14
-      },
-      "related_spans": [],
-      "snippet": "export const multiReturnDemo = query({\n  handler: async (ctx) => {\n    const messages = await ctx.db.query(\"messages\").collect();"
-    },
-    {
       "code": "RX061",
       "severity": "note",
       "message": "Generated Convex API metadata references module convex/server, but Rustex did not extract any functions from it",
@@ -1191,6 +450,6 @@
   "manifest_meta": {
     "rustex_version": "0.1.0",
     "manifest_version": 1,
-    "input_hash": "89c8c0ae52d237a287cecbd701265d18481e5b2e1ead69665f7369ec3270a322"
+    "input_hash": "87e013b7ea961ec1f53357db85288d03696c1ca70d6a32a2c7e515201bac01ea"
   }
 }

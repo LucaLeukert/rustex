@@ -3,15 +3,17 @@
 The implemented MVP follows the planned split:
 
 - `rustex-project` loads config and resolves the project layout.
-- `rustex-ts-analyzer` owns the subprocess boundary to the Bun/TypeScript analyzer.
+- `rustex-ts-analyzer` owns the subprocess boundary to the bundled Node/TypeScript analyzer.
 - `rustex-convex` finalizes and hashes the extracted IR.
 - `rustex-ir` defines the normalized cross-language contract model.
 - `rustex-rustgen` maps IR into generated Rust source files.
 - `rustex-output` writes deterministic artifacts.
 - `rustex` exposes `generate`, `check`, `inspect`, and `diff`.
 
-The analyzer intentionally does not execute user code. It runs as a Bun-executed
-TypeScript program, uses `effect` for typed control flow and failure handling,
+The analyzer intentionally does not execute user code. It is authored in
+TypeScript with `effect` for typed control flow and failure handling, bundled
+to a single JavaScript file as a build step, embedded into the Rust crate, and
+executed with Node.js,
 walks TypeScript ASTs, resolves identifiers through the TypeScript checker, and
 supports a statically analyzable subset of Convex validators:
 

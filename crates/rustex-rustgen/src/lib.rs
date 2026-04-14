@@ -1,7 +1,8 @@
 use anyhow::Result;
-use rustex_project::RustexConfig;
 use rustex_ir::{Field, Function, FunctionKind, IrPackage, Table, TypeNode};
+use rustex_project::RustexConfig;
 use std::collections::{BTreeMap, BTreeSet};
+use tracing::debug;
 
 #[derive(Debug, Clone)]
 pub struct GeneratedFile {
@@ -10,6 +11,17 @@ pub struct GeneratedFile {
 }
 
 pub fn generate(package: &IrPackage, config: &RustexConfig) -> Result<Vec<GeneratedFile>> {
+    let _span = tracing::info_span!(
+        "rustex_rustgen.generate",
+        package = %package.project.name,
+        tables = package.tables.len(),
+        functions = package.functions.len()
+    )
+    .entered();
+    debug!(
+        emit_custom_derives = config.custom_derives.len(),
+        "rendering Rust bindings"
+    );
     Ok(vec![
         GeneratedFile {
             path: "Cargo.toml".into(),
@@ -40,14 +52,14 @@ fn cargo_toml(package: &IrPackage) -> String {
         .canonicalize()
         .expect("runtime crate path");
     format!(
-        "[package]\nname = \"{}-generated\"\nversion = \"0.1.0\"\nedition = \"2024\"\n\n[lib]\npath = \"lib.rs\"\n\n[workspace]\n\n[dependencies]\nserde = {{ version = \"1\", features = [\"derive\"] }}\nserde_json = \"1\"\nrustex-runtime = {{ path = \"{}\" }}\n",
+        "[package]\nname = \"{}-generated\"\nversion = \"0.1.0\"\nedition = \"2024\"\n\n[lib]\npath = \"lib.rs\"\n\n[dependencies]\nserde = {{ version = \"1\", features = [\"derive\"] }}\nserde_json = \"1\"\nrustex-runtime = {{ path = \"{}\" }}\ntracing = \"0.1\"\ntracing-subscriber = {{ version = \"0.3\", features = [\"env-filter\", \"fmt\"] }}\n",
         package.project.name,
         runtime_path.display()
     )
 }
 
 fn lib_rs() -> String {
-    "pub mod api;\npub mod ids;\npub mod models;\n".into()
+    "pub mod api;\npub mod ids;\npub mod models;\n\npub use rustex_runtime::{RustexClient, init_default_tracing};\n".into()
 }
 
 fn ids_rs(package: &IrPackage) -> String {
@@ -120,6 +132,84 @@ fn api_rs(package: &IrPackage, config: &RustexConfig) -> String {
         out.push_str("}\n\n");
     }
 
+    out.push_str(
+        "#[doc(hidden)]\n#[macro_export]\nmacro_rules! __rustex_arg_value {\n    ($field:ident, $value:expr) => {\n        ::core::convert::Into::into($value)\n    };\n    ($field:ident) => {\n        ::core::convert::Into::into($field)\n    };\n}\n\n",
+    );
+    out.push_str(&render_operation_macro(
+        "query",
+        "query",
+        FunctionKind::Query,
+        &package.functions,
+    ));
+    out.push_str(&render_operation_macro(
+        "mutation",
+        "mutation",
+        FunctionKind::Mutation,
+        &package.functions,
+    ));
+    out.push_str(&render_operation_macro(
+        "action",
+        "action",
+        FunctionKind::Action,
+        &package.functions,
+    ));
+    out.push_str(&render_operation_macro(
+        "subscribe",
+        "subscribe",
+        FunctionKind::Query,
+        &package.functions,
+    ));
+
+    out
+}
+
+fn render_operation_macro(
+    macro_name: &str,
+    method_name: &str,
+    function_kind: FunctionKind,
+    functions: &[Function],
+) -> String {
+    let mut out = format!("#[macro_export]\nmacro_rules! {macro_name} {{\n");
+    let mut has_rule = false;
+    for function in functions
+        .iter()
+        .filter(|function| function.kind == function_kind)
+    {
+        has_rule = true;
+        let module = module_ident(&function.module_path);
+        let function_name = snake_case(&function.export_name);
+        let fn_path = format!("$crate::api::{module}::{function_name}()");
+        let args_ty = format!(
+            "$crate::api::{module}::{}Args",
+            pascal_case(&function.export_name)
+        );
+        match &function.args_type {
+            None => {
+                out.push_str(&format!(
+                    "    ($client:expr, {module}::{function_name}) => {{\n        $client.{method_name}({fn_path}, &())\n    }};\n",
+                ));
+                out.push_str(&format!(
+                    "    ($client:expr, {module}::{function_name}, {{}}) => {{\n        $client.{method_name}({fn_path}, &())\n    }};\n",
+                ));
+            }
+            Some(TypeNode::Object { .. }) => {
+                out.push_str(&format!(
+                    "    ($client:expr, {module}::{function_name}, {{ $($field:ident $( : $value:expr )?),* $(,)? }}) => {{\n        $client.{method_name}({fn_path}, &{args_ty} {{\n            $( $field: $crate::__rustex_arg_value!($field $(, $value)?), )*\n        }})\n    }};\n",
+                ));
+            }
+            Some(_) => {
+                out.push_str(&format!(
+                    "    ($client:expr, {module}::{function_name}, $args:expr) => {{\n        $client.{method_name}({fn_path}, &$args)\n    }};\n",
+                ));
+            }
+        }
+    }
+    if !has_rule {
+        out.push_str(
+            "    ($($tt:tt)*) => {\n        compile_error!(\"no generated functions support this operation macro in this crate\")\n    };\n",
+        );
+    }
+    out.push_str("}\n\n");
     out
 }
 
@@ -175,9 +265,7 @@ fn render_function(function: &Function, generator: &mut TypeGenerator) {
         FunctionKind::Mutation => {
             generator.push_raw(&format!("impl MutationSpec for {base} {{}}\n\n"))
         }
-        FunctionKind::Action => {
-            generator.push_raw(&format!("impl ActionSpec for {base} {{}}\n\n"))
-        }
+        FunctionKind::Action => generator.push_raw(&format!("impl ActionSpec for {base} {{}}\n\n")),
     }
 }
 
@@ -288,10 +376,8 @@ impl TypeGenerator {
     ) -> String {
         let name = self.claim_name(name);
         self.push_type_header(false);
-        self.items.push(format!(
-            "{}#[serde(tag = \"{}\")]\n",
-            self.indent, tag
-        ));
+        self.items
+            .push(format!("{}#[serde(tag = \"{}\")]\n", self.indent, tag));
         self.items
             .push(format!("{}pub enum {name} {{\n", self.indent));
         let mut used_variants = BTreeSet::new();
@@ -454,7 +540,8 @@ impl TypeGenerator {
             let rendered_variants = variants
                 .into_iter()
                 .map(|(value, fields)| {
-                    let rendered = self.render_fields(&fields, &format!("{hint}{}", sanitize_variant(&value)));
+                    let rendered =
+                        self.render_fields(&fields, &format!("{hint}{}", sanitize_variant(&value)));
                     (value, rendered)
                 })
                 .collect::<Vec<_>>();
@@ -521,7 +608,11 @@ impl TypeGenerator {
 }
 
 fn optional_member(members: &[TypeNode]) -> Option<&TypeNode> {
-    if members.len() == 2 && members.iter().any(|member| matches!(member, TypeNode::Null)) {
+    if members.len() == 2
+        && members
+            .iter()
+            .any(|member| matches!(member, TypeNode::Null))
+    {
         members
             .iter()
             .find(|member| !matches!(member, TypeNode::Null))
@@ -539,7 +630,11 @@ fn literal_string_union(members: &[TypeNode]) -> Option<Vec<String>> {
             return None;
         }
     }
-    if values.is_empty() { None } else { Some(values) }
+    if values.is_empty() {
+        None
+    } else {
+        Some(values)
+    }
 }
 
 fn discriminated_union_members(
@@ -603,10 +698,9 @@ fn object_union_members(members: &[TypeNode]) -> Option<Vec<Vec<Field>>> {
         })
         .collect::<Option<Vec<_>>>()?;
     object_members.sort_by(|left, right| {
-        right
-            .len()
-            .cmp(&left.len())
-            .then_with(|| object_union_variant_name(left, 0).cmp(&object_union_variant_name(right, 0)))
+        right.len().cmp(&left.len()).then_with(|| {
+            object_union_variant_name(left, 0).cmp(&object_union_variant_name(right, 0))
+        })
     });
     Some(object_members)
 }

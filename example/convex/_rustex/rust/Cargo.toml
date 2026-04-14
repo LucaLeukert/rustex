@@ -6,9 +6,9 @@ edition = "2024"
 [lib]
 path = "lib.rs"
 
-[workspace]
-
 [dependencies]
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 rustex-runtime = { path = "/Users/lucaleukert/src/rustex/crates/rustex-runtime" }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }

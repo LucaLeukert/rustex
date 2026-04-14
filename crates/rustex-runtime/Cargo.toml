@@ -7,7 +7,9 @@ license.workspace = true
 [dependencies]
 anyhow.workspace = true
 convex.workspace = true
+futures-core = "0.3"
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
-
+tracing.workspace = true
+tracing-subscriber.workspace = true

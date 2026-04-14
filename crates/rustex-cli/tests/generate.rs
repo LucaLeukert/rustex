@@ -42,7 +42,10 @@ fn generated_files_match_golden_output() -> Result<()> {
     assert!(status.success());
 
     let api = fs::read_to_string(temp.join("generated/rustex/rust/api.rs"))?;
-    assert_eq!(normalize_golden(&api), normalize_golden(include_str!("golden/api.rs")));
+    assert_eq!(
+        normalize_golden(&api),
+        normalize_golden(include_str!("golden/api.rs"))
+    );
 
     let models = fs::read_to_string(temp.join("generated/rustex/rust/models.rs"))?;
     assert_eq!(
@@ -57,7 +60,7 @@ fn generated_files_match_golden_output() -> Result<()> {
 fn init_scaffolds_default_config() -> Result<()> {
     let root = workspace_root();
     let temp = unique_temp_dir()?;
-    copy_dir(&root.join("convex"), &temp.join("convex"))?;
+    copy_dir(&root.join("example/convex"), &temp.join("convex"))?;
 
     let status = Command::new(env!("CARGO_BIN_EXE_rustex"))
         .arg("--project")
@@ -115,6 +118,112 @@ fn advanced_fixture_generates_named_types_and_compiles() -> Result<()> {
 }
 
 #[test]
+fn inferred_response_type_alias_generates_structured_rust_output() -> Result<()> {
+    let temp = unique_temp_dir()?;
+    fs::create_dir_all(temp.join("convex/_generated"))?;
+    fs::write(temp.join("rustex.toml"), inferred_fixture_config())?;
+    fs::write(
+        temp.join("convex/schema.ts"),
+        r#"import { defineSchema, defineTable } from "convex/server";
+import { v } from "convex/values";
+
+export default defineSchema({
+  messages: defineTable({
+    body: v.string(),
+  }),
+});
+"#,
+    )?;
+    fs::write(
+        temp.join("convex/messages.ts"),
+        r#"import { query } from "./_generated/server";
+
+type CollectResponse = {
+  body: string;
+}[];
+
+export const collect = query({
+  handler: async (_ctx): Promise<CollectResponse> => {
+    return [{ body: "hi" }];
+  },
+});
+"#,
+    )?;
+    fs::write(
+        temp.join("convex/_generated/api.d.ts"),
+        r#"import type * as messages from "../messages";
+declare const fullApi: { messages: typeof messages };
+export declare const api: typeof fullApi;
+"#,
+    )?;
+    fs::write(
+        temp.join("convex/_generated/server.d.ts"),
+        r#"export declare const query: any;
+"#,
+    )?;
+    fs::write(
+        temp.join("convex/_generated/dataModel.d.ts"),
+        r#"export type Id<TableName extends string> = string;
+"#,
+    )?;
+
+    let status = Command::new(env!("CARGO_BIN_EXE_rustex"))
+        .arg("--project")
+        .arg(&temp)
+        .arg("generate")
+        .status()?;
+    assert!(status.success());
+
+    let ir = fs::read_to_string(temp.join("generated/rustex/rustex.ir.json"))?;
+    assert!(ir.contains("\"kind\": \"array\""));
+    assert!(ir.contains("\"name\": \"body\""));
+
+    let api = fs::read_to_string(temp.join("generated/rustex/rust/api.rs"))?;
+    assert!(api.contains("pub type CollectResponse = Vec<CollectResponseItem>;"));
+    assert!(api.contains("pub struct CollectResponseItem"));
+    assert!(api.contains("pub body: String"));
+    assert!(!api.contains("pub type CollectResponse = serde_json::Value;"));
+
+    Ok(())
+}
+
+#[test]
+fn inferred_convex_collect_generates_table_document_array() -> Result<()> {
+    let temp = unique_temp_dir()?;
+    let root = workspace_root();
+    copy_dir(&root.join("example/convex"), &temp.join("convex"))?;
+    fs::write(temp.join("rustex.toml"), inferred_fixture_config())?;
+
+    let status = Command::new(env!("CARGO_BIN_EXE_rustex"))
+        .arg("--project")
+        .arg(&temp)
+        .arg("generate")
+        .status()?;
+    assert!(status.success());
+
+    let ir = fs::read_to_string(temp.join("generated/rustex/rustex.ir.json"))?;
+    assert!(ir.contains("\"canonical_path\": \"messages:collect\""));
+    assert!(ir.contains("\"kind\": \"array\""));
+    assert!(ir.contains("\"name\": \"_id\""));
+    assert!(ir.contains("\"name\": \"_creationTime\""));
+    assert!(ir.contains("\"name\": \"author\""));
+    assert!(ir.contains("\"name\": \"body\""));
+
+    let api = fs::read_to_string(temp.join("generated/rustex/rust/api.rs"))?;
+    assert!(api.contains("pub type CollectResponse = Vec<CollectResponseItem>;"));
+    assert!(api.contains("pub struct CollectResponseItem"));
+    assert!(api.contains("#[serde(rename = \"_id\")]"));
+    assert!(api.contains("pub id: MessagesId"));
+    assert!(api.contains("#[serde(rename = \"_creationTime\")]"));
+    assert!(api.contains("pub creation_time: f64"));
+    assert!(api.contains("pub author: String"));
+    assert!(api.contains("pub body: String"));
+    assert!(!api.contains("pub type CollectResponse = serde_json::Value;"));
+
+    Ok(())
+}
+
+#[test]
 fn helper_diagnostics_include_snippets_in_text_output() -> Result<()> {
     let temp = helper_fixture_project()?;
 
@@ -127,9 +236,9 @@ fn helper_diagnostics_include_snippets_in_text_output() -> Result<()> {
     assert!(inspect.status.success());
 
     let stdout = String::from_utf8(inspect.stdout)?;
-    assert!(stdout.contains("RX042"));
-    assert!(stdout.contains("metadata"));
-    assert!(stdout.contains("metadata,"));
+    assert!(stdout.contains("RX040"));
+    assert!(stdout.contains("buildTags"));
+    assert!(stdout.contains("tags: buildTags(),"));
 
     Ok(())
 }
@@ -165,9 +274,18 @@ export const ping = query({ args: {}, returns: v.object({ ok: v.boolean() }), ha
 "#,
     )?;
     fs::create_dir_all(temp.join("apps/chat/convex/_generated"))?;
-    fs::write(temp.join("apps/chat/convex/_generated/api.d.ts"), "import type * as ping from \"../components/presence/ping\";")?;
-    fs::write(temp.join("apps/chat/convex/_generated/server.d.ts"), "export declare const query: any;")?;
-    fs::write(temp.join("apps/chat/convex/_generated/dataModel.d.ts"), "export type Id<TableName extends string> = string;")?;
+    fs::write(
+        temp.join("apps/chat/convex/_generated/api.d.ts"),
+        "import type * as ping from \"../components/presence/ping\";",
+    )?;
+    fs::write(
+        temp.join("apps/chat/convex/_generated/server.d.ts"),
+        "export declare const query: any;",
+    )?;
+    fs::write(
+        temp.join("apps/chat/convex/_generated/dataModel.d.ts"),
+        "export type Id<TableName extends string> = string;",
+    )?;
 
     let status = Command::new(env!("CARGO_BIN_EXE_rustex"))
         .arg("--project")
@@ -288,7 +406,7 @@ export declare const httpAction: any;
 fn helper_fixture_project() -> Result<PathBuf> {
     let temp = unique_temp_dir()?;
     let root = workspace_root();
-    copy_dir(&root.join("convex"), &temp.join("convex"))?;
+    copy_dir(&root.join("example/convex"), &temp.join("convex"))?;
     fs::write(temp.join("rustex.toml"), fixture_config())?;
     fs::write(
         temp.join("convex/schema.ts"),
@@ -296,8 +414,12 @@ fn helper_fixture_project() -> Result<PathBuf> {
 import { v } from "convex/values";
 
 const metadata = {
-  tags: v.array(v.string()),
+  tags: buildTags(),
 };
+
+function buildTags() {
+  return v.array(v.string());
+}
 
 export default defineSchema({
   messages: defineTable({
@@ -357,6 +479,18 @@ id_style = "newtype_per_table"
 }
 
 fn advanced_fixture_config() -> &'static str {
+    r#"project_root = "."
+convex_root = "./convex"
+out_dir = "./generated/rustex"
+emit = ["rust", "manifest", "ir", "diagnostics", "source_map", "schema", "openapi"]
+strict = false
+allow_inferred_returns = true
+naming_strategy = "safe"
+id_style = "newtype_per_table"
+"#
+}
+
+fn inferred_fixture_config() -> &'static str {
     r#"project_root = "."
 convex_root = "./convex"
 out_dir = "./generated/rustex"

@@ -4,17 +4,33 @@ use rustex_ir::{
 };
 use sha2::{Digest, Sha256};
 use std::collections::BTreeSet;
+use tracing::debug;
 
 pub fn finalize_ir(mut package: IrPackage) -> IrPackage {
+    let _span = tracing::info_span!(
+        "rustex_convex.finalize_ir",
+        tables = package.tables.len(),
+        functions = package.functions.len()
+    )
+    .entered();
     package.tables.sort_by(|a, b| a.name.cmp(&b.name));
     package
         .functions
         .sort_by(|a, b| a.canonical_path.cmp(&b.canonical_path));
     package.named_types = collect_named_types(&package.tables, &package.functions);
     package.constraints = collect_constraints(&package.tables, &package.functions);
-    package.capabilities = collect_capabilities(&package.functions, &package.project, &package.source_inventory);
+    package.capabilities = collect_capabilities(
+        &package.functions,
+        &package.project,
+        &package.source_inventory,
+    );
     package.source_inventory = normalize_source_inventory(&package.source_inventory);
     package.manifest_meta.input_hash = compute_hash(&package);
+    debug!(
+        named_types = package.named_types.len(),
+        constraints = package.constraints.len(),
+        "finalized IR package"
+    );
     package
 }
 
@@ -86,10 +102,24 @@ fn walk_named_type(
 
     match node {
         TypeNode::Array { element } => {
-            walk_named_type(element, &format!("{key}.item"), &format!("{suggested_name}Item"), source, seen, out);
+            walk_named_type(
+                element,
+                &format!("{key}.item"),
+                &format!("{suggested_name}Item"),
+                source,
+                seen,
+                out,
+            );
         }
         TypeNode::Record { value } => {
-            walk_named_type(value, &format!("{key}.value"), &format!("{suggested_name}Value"), source, seen, out);
+            walk_named_type(
+                value,
+                &format!("{key}.value"),
+                &format!("{suggested_name}Value"),
+                source,
+                seen,
+                out,
+            );
         }
         TypeNode::Object { fields, .. } => {
             for field in fields {
@@ -189,7 +219,11 @@ fn collect_node_constraints(node: &TypeNode, path: &str, constraints: &mut Vec<C
                         detail: "nullable_or_optional".into(),
                     });
                 }
-                collect_node_constraints(&field.r#type, &format!("{path}.{}", field.name), constraints);
+                collect_node_constraints(
+                    &field.r#type,
+                    &format!("{path}.{}", field.name),
+                    constraints,
+                );
             }
         }
         TypeNode::Union { members } => {
@@ -246,17 +280,20 @@ fn collect_capabilities(
             .iter()
             .any(|function| matches!(function.visibility, Visibility::Public)),
         http_actions_present: functions.iter().any(|function| {
-            matches!(function.kind, FunctionKind::Action)
-                && function.module_path.ends_with("http")
+            matches!(function.kind, FunctionKind::Action) && function.module_path.ends_with("http")
         }),
-        components_present: functions.iter().any(|function| function.component_path.is_some())
+        components_present: functions
+            .iter()
+            .any(|function| function.component_path.is_some())
             || source_inventory
                 .iter()
                 .any(|item| matches!(item.kind, SourceKind::ComponentModule)),
     }
 }
 
-fn normalize_source_inventory(source_inventory: &[SourceInventoryItem]) -> Vec<SourceInventoryItem> {
+fn normalize_source_inventory(
+    source_inventory: &[SourceInventoryItem],
+) -> Vec<SourceInventoryItem> {
     let mut items = source_inventory.to_vec();
     items.sort_by(|a, b| a.path.cmp(&b.path));
     items.dedup_by(|a, b| a.path == b.path && a.kind == b.kind);

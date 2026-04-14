@@ -13,24 +13,3 @@ export const collect = query({
     return await ctx.db.query("messages").collect();
   },
 });
-
-export const findByAuthor = query({
-  args: { author: v.string() },
-  handler: async (ctx, { author }) => {
-    return await ctx.db
-      .query("messages")
-      .filter((q) => q.eq(q.field("author"), author))
-      .collect();
-  },
-});
-
-export const multiReturnDemo = query({
-  handler: async (ctx) => {
-    const messages = await ctx.db.query("messages").collect();
-    const count = messages.length;
-    if(count === 0) {
-      return { error: "No messages found" };
-    }
-    return { messages, count, error: ""};
-  },
-});

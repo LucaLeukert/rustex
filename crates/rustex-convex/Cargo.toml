@@ -8,3 +8,4 @@ license.workspace = true
 rustex-ir = { path = "../rustex-ir" }
 serde_json.workspace = true
 sha2.workspace = true
+tracing.workspace = true

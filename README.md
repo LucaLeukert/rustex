@@ -31,18 +31,14 @@ That is not safe because:
 Rustex should generate and support calls like this instead:
 
 ```rust
-use rustex_runtime::TypedConvexClient;
 use rustex_generated::api::messages;
+use rustex_runtime::RustexClient;
 
-let mut client = TypedConvexClient::new(&deployment_url).await?;
-let result = client
-    .mutation(
-        messages::add(),
-        &messages::AddArgs {
-            author: "alice".into(),
-            body: "hello".into(),
-        },
-    )
+let mut client = RustexClient::new(&deployment_url).await?;
+let result = rustex_generated::mutation!(client, messages::add, {
+        author: "alice",
+        body: "hello",
+    })
     .await?;
 ```
 
@@ -129,7 +125,7 @@ Policy:
 
 - `crates/rustex-cli`: CLI entrypoint and command orchestration
 - `crates/rustex-project`: config loading and project layout resolution
-- `crates/rustex-ts-analyzer`: Rust bridge to the Bun/TypeScript analyzer
+- `crates/rustex-ts-analyzer`: Rust bridge to the Node/TypeScript analyzer
 - `crates/rustex-convex`: IR finalization and hashing
 - `crates/rustex-ir`: language-agnostic IR model
 - `crates/rustex-diagnostics`: structured diagnostics model
@@ -137,12 +133,12 @@ Policy:
 - `crates/rustex-rustgen`: Rust code generation backend
 - `crates/rustex-output`: deterministic artifact writing
 - `crates/rustex-testkit`: shared test utilities
-- `packages/ts-analyzer`: Bun-executed TypeScript analyzer
+- `packages/ts-analyzer`: Effect-based TypeScript analyzer bundled to a single JavaScript file for Node
 
 ### Extraction pipeline
 
 1. Load `rustex.toml` and resolve the project layout.
-2. Invoke the Bun/TypeScript analyzer from Rust.
+2. Bundle the Node/TypeScript analyzer and invoke it from Rust.
 3. Build a TypeScript `Program` for the Convex project.
 4. Parse schema validators and exported Convex function registrations.
 5. Normalize extracted shapes into IR.
@@ -197,7 +193,7 @@ Current generated API policy:
 
 `rustex-runtime` wraps the official `convex` crate and provides:
 
-- `TypedConvexClient`
+- `RustexClient`
 - `FunctionSpec`, `QuerySpec`, `MutationSpec`, `ActionSpec`
 - argument serialization into `convex::Value`
 - typed response decoding from `convex::FunctionResult`
@@ -219,8 +215,8 @@ Analyzer-specific checks:
 
 ```sh
 cd packages/ts-analyzer
-bun install
-bun run check
+pnpm install
+npm run check
 ```
 
 Default output location:
@@ -237,7 +233,7 @@ Config file:
 
 - [x] Rust workspace and crate split
 - [x] Top-level `rustex.toml`
-- [x] Bun-based analyzer package
+- [x] TypeScript analyzer package
 - [x] Example `convex/` app in the repo root
 - [x] Monorepo runtime crate
 
@@ -261,7 +257,7 @@ Config file:
 
 - [x] Real TypeScript source file analyzer
 - [x] Strict analyzer `tsconfig.json`
-- [x] Bun runtime integration
+- [x] Node runtime integration for the analyzer bridge
 - [x] Effect-based control flow
 - [x] Effect-compatible CLI option parsing
 - [x] TypeScript `Program` creation and symbol resolution
@@ -359,7 +355,7 @@ Config file:
 ### Testing
 
 - [x] end-to-end smoke test driven by the root `convex/` example app
-- [x] analyzer typecheck with Bun
+- [x] analyzer typecheck with TypeScript/Node
 - [x] `cargo test`
 - [x] runtime conversion tests
 - [x] smoke test coverage for generated typed API descriptors

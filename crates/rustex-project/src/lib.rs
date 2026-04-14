@@ -1,6 +1,7 @@
 use anyhow::{Context, Result};
 use camino::{Utf8Path, Utf8PathBuf};
 use serde::{Deserialize, Serialize};
+use tracing::debug;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RustexConfig {
@@ -24,7 +25,7 @@ pub struct RustexConfig {
 }
 
 fn default_emit() -> Vec<String> {
-        vec!["rust".into(), "manifest".into(), "ir".into()]
+    vec!["rust".into(), "manifest".into(), "ir".into()]
 }
 
 fn default_naming() -> String {
@@ -63,6 +64,7 @@ pub struct ProjectLayout {
 }
 
 pub fn load_config(root: &Utf8Path) -> Result<(RustexConfig, ProjectLayout)> {
+    let _span = tracing::info_span!("rustex_project.load_config", root = %root).entered();
     let config_path = root.join("rustex.toml");
     let raw = std::fs::read_to_string(&config_path)
         .with_context(|| format!("failed to read config at {config_path}"))?;
@@ -93,6 +95,7 @@ pub fn load_config(root: &Utf8Path) -> Result<(RustexConfig, ProjectLayout)> {
     };
 
     validate_layout(&layout)?;
+    debug!(convex_root = %layout.convex_root, out_dir = %layout.out_dir, "resolved project layout");
 
     Ok((config, layout))
 }

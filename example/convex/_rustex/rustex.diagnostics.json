@@ -45,51 +45,6 @@
     "snippet": "export const collect = query({\n  handler: async (ctx) => {\n    return await ctx.db.query(\"messages\").collect();"
   },
   {
-    "code": "RX022",
-    "severity": "warning",
-    "message": "Function findByAuthor has no returns validator; inferring response contract from the TypeScript checker",
-    "symbol": "findByAuthor",
-    "provenance": "inferred",
-    "suggestion": "Add a returns validator to make the inferred contract explicit and stable.",
-    "primary_span": {
-      "file": "/Users/lucaleukert/src/rustex/example/convex/messages.ts",
-      "line": 17,
-      "column": 14
-    },
-    "related_spans": [],
-    "snippet": "export const findByAuthor = query({\n  args: { author: v.string() },\n  handler: async (ctx, { author }) => {"
-  },
-  {
-    "code": "RX010",
-    "severity": "warning",
-    "message": "Function multiReturnDemo has no args validator",
-    "symbol": "multiReturnDemo",
-    "provenance": "source",
-    "suggestion": "Add an args validator to enable request contract generation.",
-    "primary_span": {
-      "file": "/Users/lucaleukert/src/rustex/example/convex/messages.ts",
-      "line": 27,
-      "column": 14
-    },
-    "related_spans": [],
-    "snippet": "export const multiReturnDemo = query({\n  handler: async (ctx) => {\n    const messages = await ctx.db.query(\"messages\").collect();"
-  },
-  {
-    "code": "RX022",
-    "severity": "warning",
-    "message": "Function multiReturnDemo has no returns validator; inferring response contract from the TypeScript checker",
-    "symbol": "multiReturnDemo",
-    "provenance": "inferred",
-    "suggestion": "Add a returns validator to make the inferred contract explicit and stable.",
-    "primary_span": {
-      "file": "/Users/lucaleukert/src/rustex/example/convex/messages.ts",
-      "line": 27,
-      "column": 14
-    },
-    "related_spans": [],
-    "snippet": "export const multiReturnDemo = query({\n  handler: async (ctx) => {\n    const messages = await ctx.db.query(\"messages\").collect();"
-  },
-  {
     "code": "RX061",
     "severity": "note",
     "message": "Generated Convex API metadata references module convex/server, but Rustex did not extract any functions from it",

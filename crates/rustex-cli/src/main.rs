@@ -1,7 +1,6 @@
 use anyhow::{Context, Result, bail};
 use camino::{Utf8Path, Utf8PathBuf};
 use clap::{Parser, Subcommand};
-use log::{debug, info, log};
 use rustex_convex::finalize_ir;
 use rustex_output::{
     json_schema_document, openapi_document, source_map_document, write_diagnostics, write_ir,
@@ -13,6 +12,8 @@ use rustex_ts_analyzer::analyze;
 use std::collections::BTreeMap;
 use std::thread;
 use std::time::{Duration, SystemTime};
+use tracing::{debug, info, warn};
+use tracing_subscriber::{EnvFilter, fmt};
 
 #[derive(Parser)]
 #[command(author, version, about = "Convex -> Rust code generation toolkit")]
@@ -45,9 +46,12 @@ enum Command {
 }
 
 fn main() -> Result<()> {
-    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info"))
+    fmt()
+        .with_env_filter(
+            EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")),
+        )
         .try_init()
-        .context("failed to initialize logger")?;
+        .map_err(|error| anyhow::anyhow!("failed to initialize tracing subscriber: {error}"))?;
     let cli = Cli::parse();
     let project_arg = cli.project.clone();
     match cli.command {
@@ -139,6 +143,12 @@ fn run_command(root: &Utf8Path, command: Command) -> Result<()> {
 }
 
 fn analyze_package(layout: &rustex_project::ProjectLayout) -> Result<rustex_ir::IrPackage> {
+    let _span = tracing::info_span!(
+        "rustex_cli.analyze_package",
+        project_root = %layout.root,
+        convex_root = %layout.convex_root
+    )
+    .entered();
     let (config, _) = load_config(&layout.root)?;
     let mut package = analyze(
         &layout.root,
@@ -151,13 +161,17 @@ fn analyze_package(layout: &rustex_project::ProjectLayout) -> Result<rustex_ir::
 }
 
 fn emit_generate(config: &RustexConfig, layout: &rustex_project::ProjectLayout) -> Result<()> {
+    let _span =
+        tracing::info_span!("rustex_cli.emit_generate", out_dir = %layout.out_dir).entered();
     let package = analyze_package(layout)?;
     emit_all(&config.emit, &layout.out_dir, &package)
 }
 
 fn emit_all(emit: &[String], out_dir: &Utf8Path, package: &rustex_ir::IrPackage) -> Result<()> {
     for e in emit {
-        debug!("log: emitting {} to {}", e, out_dir);
+        let _span =
+            tracing::debug_span!("rustex_cli.emit", artifact = %e, out_dir = %out_dir).entered();
+        debug!("emitting artifact");
         match e.as_str() {
             "rust" => {
                 let (config, _) = load_config(&package.project.root)?;
@@ -170,9 +184,9 @@ fn emit_all(emit: &[String], out_dir: &Utf8Path, package: &rustex_ir::IrPackage)
             "source_map" => write_source_map(package, out_dir)?,
             "schema" => write_json_schema(package, out_dir)?,
             "openapi" => write_openapi(package, out_dir)?,
-            other => log!(log::Level::Warn, "unknown emit type: {}", other),
+            other => warn!(emit = %other, "unknown emit type"),
         }
-        debug!("finished emitting {}, checking for changes...", e);
+        debug!("finished emitting artifact");
     }
     Ok(())
 }
@@ -217,6 +231,8 @@ fn expected_outputs(
 }
 
 fn diff_outputs(expected: &BTreeMap<Utf8PathBuf, String>) -> Result<Vec<String>> {
+    let _span =
+        tracing::debug_span!("rustex_cli.diff_outputs", file_count = expected.len()).entered();
     let mut changed = Vec::new();
     for (path, contents) in expected {
         let current = std::fs::read_to_string(path).ok();
@@ -357,10 +373,10 @@ fn watch(root: &Utf8Path, poll_ms: u64) -> Result<()> {
         }
 
         previous = current;
-        log!(log::Level::Info, "change detected, regenerating...");
+        info!("change detected, regenerating");
         match load_config(root).and_then(|(config, layout)| emit_generate(&config, &layout)) {
-            Ok(()) => log!(log::Level::Info, "generation completed successfully"),
-            Err(error) => log!(log::Level::Error, "generation failed: {error:#}"),
+            Ok(()) => info!("generation completed successfully"),
+            Err(error) => tracing::error!(error = ?error, "generation failed"),
         }
     }
 }

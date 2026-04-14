@@ -10,5 +10,4 @@ camino.workspace = true
 rustex-ir = { path = "../rustex-ir" }
 rustex-rustgen = { path = "../rustex-rustgen" }
 serde_json.workspace = true
-log.workspace = true
-
+tracing.workspace = true

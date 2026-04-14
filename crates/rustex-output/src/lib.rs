@@ -3,7 +3,7 @@ use camino::Utf8Path;
 use rustex_ir::{ConstraintKind, IrPackage, NamedType, Origin, TypeNode};
 use rustex_rustgen::GeneratedFile;
 use serde_json::{Map, Value, json};
-use log::{info};
+use tracing::info;
 
 pub fn write_ir(package: &IrPackage, out_dir: &Utf8Path) -> Result<()> {
     std::fs::create_dir_all(out_dir)?;
@@ -177,7 +177,10 @@ pub fn json_schema_document(package: &IrPackage) -> Value {
 fn schema_for_named_type(named_type: &NamedType) -> Value {
     let mut schema = schema_for_type(&named_type.node);
     if let Value::Object(ref mut object) = schema {
-        object.insert("title".into(), Value::String(named_type.suggested_name.clone()));
+        object.insert(
+            "title".into(),
+            Value::String(named_type.suggested_name.clone()),
+        );
     }
     schema
 }
@@ -196,7 +199,9 @@ fn schema_for_type(node: &TypeNode) -> Value {
         TypeNode::LiteralBoolean { value } => json!({"type":"boolean","const":value}),
         TypeNode::Id { table } => json!({"type":"string","x-rustex-id-table":table}),
         TypeNode::Array { element } => json!({"type":"array","items":schema_for_type(element)}),
-        TypeNode::Record { value } => json!({"type":"object","additionalProperties":schema_for_type(value)}),
+        TypeNode::Record { value } => {
+            json!({"type":"object","additionalProperties":schema_for_type(value)})
+        }
         TypeNode::Object { fields, .. } => {
             let properties = fields
                 .iter()

@@ -1,32 +1,39 @@
 use anyhow::{Context, Result, bail};
 use camino::Utf8Path;
-use log::info;
 use rustex_ir::IrPackage;
 use sha2::{Digest, Sha256};
-use std::process::Command;
+use std::{fs, path::PathBuf, process::Command};
+use tracing::debug;
 use walkdir::WalkDir;
+
+static ANALYZER_BUNDLE: &[u8] = include_bytes!(env!("RUSTEX_TS_ANALYZER_BUNDLE"));
+const ANALYZER_BUNDLE_SHA256: &str = env!("RUSTEX_TS_ANALYZER_BUNDLE_SHA256");
 
 pub fn analyze(
     project_root: &Utf8Path,
     convex_root: &Utf8Path,
     allow_inferred_returns: bool,
 ) -> Result<IrPackage> {
-    let manifest_dir = Utf8Path::new(env!("CARGO_MANIFEST_DIR"));
-    let script = manifest_dir
-        .join("../../packages/ts-analyzer/src/analyze.ts")
-        .canonicalize_utf8()
-        .with_context(|| "failed to resolve analyzer script path")?;
+    let _span = tracing::info_span!(
+        "rustex_ts_analyzer.analyze",
+        project_root = %project_root,
+        convex_root = %convex_root,
+        allow_inferred_returns
+    )
+    .entered();
+    let script = materialize_analyzer_bundle(project_root)?;
+    let node = find_node_binary()?;
     let cache_path = project_root.join(".rustex-cache").join("analyzer.json");
-    let cache_key = snapshot_key(project_root, convex_root, allow_inferred_returns, &script)?;
+    let cache_key = snapshot_key(project_root, convex_root, allow_inferred_returns)?;
 
     if let Some(package) = load_cached(&cache_path, &cache_key)? {
+        debug!(cache_path = %cache_path, "using cached analyzer output");
         return Ok(package);
     }
 
-    let mut command = Command::new("bun");
+    let mut command = Command::new(node);
     command
-        .arg("run")
-        .arg(script.as_str())
+        .arg(script.as_os_str())
         .arg("--project-root")
         .arg(project_root.as_str())
         .arg("--convex-root")
@@ -51,7 +58,64 @@ pub fn analyze(
     package.project.root = project_root.to_path_buf();
     package.project.convex_root = convex_root.to_path_buf();
     store_cached(&cache_path, &cache_key, &package)?;
+    debug!(cache_path = %cache_path, "stored analyzer output cache");
     Ok(package)
+}
+
+fn materialize_analyzer_bundle(project_root: &Utf8Path) -> Result<PathBuf> {
+    let bundle_dir = project_root.join(".rustex-cache").join("runtime");
+    fs::create_dir_all(&bundle_dir).with_context(|| {
+        format!(
+            "failed to create analyzer runtime cache directory {}",
+            bundle_dir
+        )
+    })?;
+    let bundle_path = bundle_dir.join(format!("analyze-{ANALYZER_BUNDLE_SHA256}.cjs"));
+    let bundle_path_std = bundle_path.as_std_path().to_path_buf();
+
+    let should_write = match fs::read(&bundle_path_std) {
+        Ok(existing) => existing != ANALYZER_BUNDLE,
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => true,
+        Err(err) => {
+            return Err(err)
+                .with_context(|| format!("failed to read cached analyzer bundle {}", bundle_path));
+        }
+    };
+
+    if should_write {
+        fs::write(&bundle_path_std, ANALYZER_BUNDLE)
+            .with_context(|| format!("failed to write analyzer bundle to {}", bundle_path))?;
+    }
+
+    Ok(bundle_path_std)
+}
+
+fn find_node_binary() -> Result<PathBuf> {
+    if let Ok(explicit) = std::env::var("RUSTEX_NODE_BIN") {
+        return verify_node_binary(PathBuf::from(explicit));
+    }
+    for candidate in ["node", "nodejs"] {
+        if let Ok(path) = verify_node_binary(PathBuf::from(candidate)) {
+            return Ok(path);
+        }
+    }
+    bail!("failed to locate a usable Node.js binary; set RUSTEX_NODE_BIN or install node");
+}
+
+fn verify_node_binary(path: PathBuf) -> Result<PathBuf> {
+    let output = Command::new(&path)
+        .arg("--version")
+        .output()
+        .with_context(|| format!("failed to execute Node.js binary {}", path.display()))?;
+    if output.status.success() {
+        Ok(path)
+    } else {
+        bail!(
+            "Node.js binary {} exited with status {}",
+            path.display(),
+            output.status
+        )
+    }
 }
 
 #[derive(serde::Serialize, serde::Deserialize)]
@@ -88,15 +152,12 @@ fn snapshot_key(
     project_root: &Utf8Path,
     convex_root: &Utf8Path,
     allow_inferred_returns: bool,
-    script_path: &Utf8Path,
 ) -> Result<String> {
     let mut hasher = Sha256::new();
     hasher.update(project_root.as_str());
     hasher.update(convex_root.as_str());
     hasher.update(if allow_inferred_returns { b"1" } else { b"0" });
-    if let Ok(bytes) = std::fs::read(script_path) {
-        hasher.update(bytes);
-    }
+    hasher.update(ANALYZER_BUNDLE_SHA256.as_bytes());
 
     for entry in WalkDir::new(convex_root)
         .sort_by_file_name()

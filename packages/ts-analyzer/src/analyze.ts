@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { CliConfig, Options } from "@effect/cli";
-import { BunContext, BunRuntime } from "@effect/platform-bun";
+import { NodeContext, NodeRuntime } from "@effect/platform-node";
 import { Data, Effect, Layer, Option, pipe } from "effect";
 import ts from "typescript";
 
@@ -111,12 +111,13 @@ class AnalyzerError extends Data.TaggedError("AnalyzerError")<{
 }> {}
 
 type AnalyzerContext = {
-  readonly projectRoot: string;
-  readonly convexRoot: string;
-  readonly checker: ts.TypeChecker;
-  readonly program: ts.Program;
-  readonly diagnostics: Diagnostic[];
-  readonly allowInferredReturns: boolean;
+  projectRoot: string;
+  convexRoot: string;
+  checker: ts.TypeChecker;
+  program: ts.Program;
+  diagnostics: Diagnostic[];
+  allowInferredReturns: boolean;
+  tables: Table[];
 };
 
 const FUNCTION_KIND_MAP: Record<
@@ -133,7 +134,11 @@ const FUNCTION_KIND_MAP: Record<
 };
 
 const main = Effect.gen(function* () {
-  const args = yield* parseCliArgs(process.argv.slice(2));
+  const args: {
+    projectRoot: string;
+    convexRoot: string;
+    allowInferredReturns: boolean;
+  } = yield* parseCliArgs(process.argv.slice(2));
   const packageJsonPath = path.join(args.projectRoot, "package.json");
   const convexPackagePath = path.join(
     args.projectRoot,
@@ -142,14 +147,33 @@ const main = Effect.gen(function* () {
     "package.json",
   );
 
-  const parsedConfig = yield* parseTsConfig(args.convexRoot);
-  const fileNames = Array.from(
-    new Set([...parsedConfig.fileNames, ...listTsFiles(args.convexRoot)]),
+  const parsedConfig: ts.ParsedCommandLine = yield* parseTsConfig(
+    args.convexRoot,
   );
-  const program = ts.createProgram({
-    rootNames: fileNames,
-    options: parsedConfig.options,
-  });
+  const discoveredFiles: string[] = yield* listTsFiles(args.convexRoot);
+  const fileNames = Array.from(
+    new Set([...parsedConfig.fileNames, ...discoveredFiles]),
+  );
+  const program = yield* (Effect.try({
+    try: () =>
+      ts.createProgram({
+        rootNames: fileNames,
+        options: parsedConfig.options,
+      }),
+    catch: (cause) =>
+      new AnalyzerError({
+        message: "failed to create TypeScript program",
+        cause,
+      }),
+  }).pipe(
+    Effect.withSpan("rustex.ts_analyzer.createProgram", {
+      attributes: {
+        "rustex.project_root": args.projectRoot,
+        "rustex.convex_root": args.convexRoot,
+        "rustex.ts_file_count": fileNames.length,
+      },
+    }),
+  ));
 
   const context: AnalyzerContext = {
     projectRoot: args.projectRoot,
@@ -158,6 +182,7 @@ const main = Effect.gen(function* () {
     program,
     diagnostics: [],
     allowInferredReturns: args.allowInferredReturns,
+    tables: [],
   };
 
   const packageJson = readJsonFile(packageJsonPath).pipe(
@@ -182,9 +207,19 @@ const main = Effect.gen(function* () {
       onSome: (source) => extractSchema(context, source),
     }),
   );
+  context.tables = tables;
 
   const pkg = yield* packageJson;
 
+  const generatedMetadataPresent: boolean = yield* pathExists(
+    path.join(args.convexRoot, "_generated", "api.d.ts"),
+  );
+  const componentRoots: string[] = yield* discoverComponentRoots(
+    args.convexRoot,
+  );
+  const sourceInventory: Array<{ path: string; kind: string }> = yield* buildSourceInventory(
+    args.convexRoot,
+  );
   const ir: IrPackage = {
     project: {
       name:
@@ -197,27 +232,23 @@ const main = Effect.gen(function* () {
       root: normalize(args.projectRoot),
       convex_root: normalize(args.convexRoot),
       convex_version: yield* convexVersion,
-      generated_metadata_present: fs.existsSync(
-        path.join(args.convexRoot, "_generated", "api.d.ts"),
-      ),
+      generated_metadata_present: generatedMetadataPresent,
       discovered_convex_roots: [normalize(args.convexRoot)],
-      component_roots: discoverComponentRoots(args.convexRoot),
+      component_roots: componentRoots,
     },
     tables,
     functions: extractFunctions(context),
     named_types: [],
     constraints: [],
     capabilities: {
-      generated_metadata_present: fs.existsSync(
-        path.join(args.convexRoot, "_generated", "api.d.ts"),
-      ),
+      generated_metadata_present: generatedMetadataPresent,
       inferred_returns_used: false,
       internal_functions_present: false,
       public_functions_present: false,
       http_actions_present: false,
       components_present: false,
     },
-    source_inventory: buildSourceInventory(args.convexRoot),
+    source_inventory: sourceInventory,
     diagnostics: context.diagnostics,
     manifest_meta: {
       rustex_version: "0.1.0",
@@ -228,6 +259,7 @@ const main = Effect.gen(function* () {
 
   yield* writeStdout(JSON.stringify(ir));
 }).pipe(
+  Effect.withSpan("rustex.ts_analyzer.run"),
   Effect.catchTag("AnalyzerError", (error) =>
     Effect.try({
       try: () => {
@@ -246,10 +278,10 @@ const main = Effect.gen(function* () {
   ),
 );
 
-BunRuntime.runMain(
+NodeRuntime.runMain(
   pipe(
     main,
-    Effect.provide(Layer.mergeAll(CliConfig.defaultLayer, BunContext.layer)),
+    Effect.provide(Layer.mergeAll(CliConfig.defaultLayer, NodeContext.layer)),
   ),
 );
 
@@ -310,26 +342,33 @@ function parseTsConfig(convexRoot: string) {
       );
       if (!tsConfigPath) {
         return {
-          fileNames: listTsFiles(convexRoot),
+          fileNames: walkSync(convexRoot).filter(
+            (file) => file.endsWith(".ts") || file.endsWith(".tsx"),
+          ),
           options: {
             target: ts.ScriptTarget.ES2022,
             module: ts.ModuleKind.NodeNext,
           },
-        };
+          errors: [],
+        } satisfies ts.ParsedCommandLine;
       }
       const loaded = ts.readConfigFile(tsConfigPath, ts.sys.readFile);
       return ts.parseJsonConfigFileContent(
         loaded.config,
         ts.sys,
         path.dirname(tsConfigPath),
-      );
+        );
     },
     catch: (cause) =>
       new AnalyzerError({
         message: "failed to parse TypeScript config",
         cause,
       }),
-  });
+  }).pipe(
+    Effect.withSpan("rustex.ts_analyzer.parseTsConfig", {
+      attributes: { "rustex.convex_root": convexRoot },
+    }),
+  );
 }
 
 function detectConvexVersion(convexPackagePath: string, convexRoot: string) {
@@ -347,36 +386,51 @@ function detectConvexVersion(convexPackagePath: string, convexRoot: string) {
       return null;
     }),
     Effect.orElse(() =>
-      Effect.try({
-        try: () => {
-          const generatedPath = path.join(convexRoot, "_generated", "api.d.ts");
-          if (!fs.existsSync(generatedPath)) {
-            return null;
-          }
-          const match = fs
-            .readFileSync(generatedPath, "utf8")
-            .match(/Generated by convex@([0-9A-Za-z.+-]+)/);
-          return match?.[1] ?? null;
-        },
-        catch: (cause) =>
-          new AnalyzerError({
-            message: "failed to detect Convex version",
-            cause,
-          }),
-      }),
+      Effect.gen(function* () {
+        const generatedPath = path.join(convexRoot, "_generated", "api.d.ts");
+        if (!(yield* pathExists(generatedPath))) {
+          return null;
+        }
+        const contents = yield* readFileUtf8(generatedPath);
+        const match = contents.match(/Generated by convex@([0-9A-Za-z.+-]+)/);
+        return match?.[1] ?? null;
+      }).pipe(
+        Effect.mapError(
+          (cause) =>
+            cause instanceof AnalyzerError
+              ? cause
+              : new AnalyzerError({
+                  message: "failed to detect Convex version",
+                  cause,
+                }),
+        ),
+      ),
     ),
+    Effect.withSpan("rustex.ts_analyzer.detectConvexVersion", {
+      attributes: {
+        "rustex.convex_root": convexRoot,
+        "rustex.convex_package_path": convexPackagePath,
+      },
+    }),
   );
 }
 
 function readJsonFile(filePath: string) {
-  return Effect.try({
-    try: () => JSON.parse(fs.readFileSync(filePath, "utf8")) as unknown,
-    catch: (cause) =>
-      new AnalyzerError({
-        message: `failed to read JSON file ${filePath}`,
-        cause,
+  return readFileUtf8(filePath).pipe(
+    Effect.flatMap((contents) =>
+      Effect.try({
+        try: () => JSON.parse(contents) as unknown,
+        catch: (cause) =>
+          new AnalyzerError({
+            message: `failed to read JSON file ${filePath}`,
+            cause,
+          }),
       }),
-  });
+    ),
+    Effect.withSpan("rustex.ts_analyzer.readJsonFile", {
+      attributes: { "rustex.file_path": filePath },
+    }),
+  );
 }
 
 function writeStdout(contents: string) {
@@ -391,25 +445,39 @@ function normalize(value: string): string {
   return value.split(path.sep).join("/");
 }
 
-function listTsFiles(root: string): string[] {
-  const found: string[] = [];
-  walk(root, (file) => {
-    if (file.endsWith(".ts") || file.endsWith(".tsx")) {
-      found.push(file);
-    }
-  });
-  return found;
+function listTsFiles(root: string) {
+  return walk(root).pipe(
+    Effect.map((files) =>
+      files.filter((file) => file.endsWith(".ts") || file.endsWith(".tsx")),
+    ),
+    Effect.withSpan("rustex.ts_analyzer.listTsFiles", {
+      attributes: { "rustex.root": root },
+    }),
+  );
 }
 
-function walk(dir: string, visit: (file: string) => void): void {
+function walk(dir: string): Effect.Effect<string[], AnalyzerError> {
+  return Effect.try({
+    try: () => walkSync(dir),
+    catch: (cause) =>
+      new AnalyzerError({
+        message: `failed to walk directory ${dir}`,
+        cause,
+      }),
+  });
+}
+
+function walkSync(dir: string): string[] {
+  const found: string[] = [];
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
     const full = path.join(dir, entry.name);
     if (entry.isDirectory()) {
-      walk(full, visit);
+      found.push(...walkSync(full));
     } else {
-      visit(full);
+      found.push(full);
     }
   }
+  return found;
 }
 
 function extractSchema(
@@ -909,7 +977,9 @@ function componentPathForModule(modulePath: string): string | null {
   return parts.length >= 3 ? parts.slice(0, 2).join("/") : "components";
 }
 
-function discoverComponentRoots(convexRoot: string): string[] {
+function discoverComponentRoots(convexRoot: string) {
+  return Effect.try({
+    try: () => {
   const componentsRoot = path.join(convexRoot, "components");
   if (
     !fs.existsSync(componentsRoot) ||
@@ -922,25 +992,44 @@ function discoverComponentRoots(convexRoot: string): string[] {
     .filter((entry) => entry.isDirectory())
     .map((entry) => normalize(path.join(componentsRoot, entry.name)))
     .sort();
+    },
+    catch: (cause) =>
+      new AnalyzerError({
+        message: `failed to discover component roots under ${convexRoot}`,
+        cause,
+      }),
+  }).pipe(
+    Effect.withSpan("rustex.ts_analyzer.discoverComponentRoots", {
+      attributes: { "rustex.convex_root": convexRoot },
+    }),
+  );
 }
 
-function buildSourceInventory(
-  convexRoot: string,
-): Array<{ path: string; kind: string }> {
-  const items: Array<{ path: string; kind: string }> = [];
-  walk(convexRoot, (file) => {
-    const normalized = normalize(file);
-    if (normalized.endsWith("/schema.ts")) {
-      items.push({ path: normalized, kind: "schema" });
-    } else if (normalized.includes("/_generated/")) {
-      items.push({ path: normalized, kind: "generated_metadata" });
-    } else if (normalized.includes("/components/")) {
-      items.push({ path: normalized, kind: "component_module" });
-    } else if (normalized.endsWith(".ts") || normalized.endsWith(".tsx")) {
-      items.push({ path: normalized, kind: "function_module" });
-    }
-  });
-  return items.sort((left, right) => left.path.localeCompare(right.path));
+function buildSourceInventory(convexRoot: string) {
+  return walk(convexRoot).pipe(
+    Effect.map((files) => {
+      const items: Array<{ path: string; kind: string }> = [];
+      for (const file of files) {
+        const normalized = normalize(file);
+        if (normalized.endsWith("/schema.ts")) {
+          items.push({ path: normalized, kind: "schema" });
+        } else if (normalized.includes("/_generated/")) {
+          items.push({ path: normalized, kind: "generated_metadata" });
+        } else if (normalized.includes("/components/")) {
+          items.push({ path: normalized, kind: "component_module" });
+        } else if (
+          normalized.endsWith(".ts") ||
+          normalized.endsWith(".tsx")
+        ) {
+          items.push({ path: normalized, kind: "function_module" });
+        }
+      }
+      return items.sort((left, right) => left.path.localeCompare(right.path));
+    }),
+    Effect.withSpan("rustex.ts_analyzer.buildSourceInventory", {
+      attributes: { "rustex.convex_root": convexRoot },
+    }),
+  );
 }
 
 function inferHandlerReturnType(
@@ -987,10 +1076,7 @@ function inferHandlerReturnType(
     getPromisedTypeOfPromise?(type: ts.Type): ts.Type | undefined;
     getAwaitedType?(type: ts.Type): ts.Type | undefined;
   };
-  const awaited =
-    checkerWithPromiseHelpers.getAwaitedType?.(rawType) ??
-    checkerWithPromiseHelpers.getPromisedTypeOfPromise?.(rawType) ??
-    rawType;
+  const awaited = unwrapAwaitedType(checkerWithPromiseHelpers, rawType);
   return typeToNode(context, awaited, sourceFile, new Set());
 }
 
@@ -1113,9 +1199,19 @@ function typeToNode(
   }
 
   const symbol = type.getSymbol();
-  if (symbol?.getName() === "GenericId" || typeName.startsWith("Id<")) {
-    const match = typeName.match(/<"([^"]+)">/);
-    const table = match?.[1];
+  const aliasSymbol = type.aliasSymbol?.getName();
+  const aliasTypeArgument = type.aliasTypeArguments?.[0];
+  const aliasedTable =
+    aliasTypeArgument &&
+    (aliasTypeArgument.flags & ts.TypeFlags.StringLiteral)
+      ? (aliasTypeArgument as ts.StringLiteralType).value
+      : null;
+  if (
+    symbol?.getName() === "GenericId" ||
+    aliasSymbol === "Id" ||
+    typeName.startsWith("Id<")
+  ) {
+    const table = aliasedTable ?? typeName.match(/<"([^"]+)">/)?.[1];
     if (table) {
       return { kind: "id", table };
     }
@@ -1168,6 +1264,16 @@ function typeToNode(
     return { kind: "object", fields, open: false };
   }
 
+  for (const candidate of expandTypeResolutionCandidates(context, type)) {
+    if (candidate === type || seen.has(candidate)) {
+      continue;
+    }
+    const resolved = typeToNode(context, candidate, sourceFile, new Set(seen));
+    if (!matchesUnknownOrAny(resolved)) {
+      return resolved;
+    }
+  }
+
   pushDiagnostic(context, {
     code: "RX051",
     severity: "note",
@@ -1181,6 +1287,35 @@ function typeToNode(
     snippet: null,
   });
   return unknown(`type_inference:${typeName}`);
+}
+
+function expandTypeResolutionCandidates(
+  context: AnalyzerContext,
+  type: ts.Type,
+): ts.Type[] {
+  const candidates: ts.Type[] = [];
+  const push = (candidate: ts.Type | undefined) => {
+    if (candidate && !candidates.includes(candidate)) {
+      candidates.push(candidate);
+    }
+  };
+
+  push(context.checker.getApparentType(type));
+
+  if (type.aliasSymbol) {
+    const declared = context.checker.getDeclaredTypeOfSymbol(type.aliasSymbol);
+    push(declared);
+    push(context.checker.getApparentType(declared));
+  }
+
+  const symbol = type.getSymbol();
+  if (symbol && symbol !== type.aliasSymbol) {
+    const declared = context.checker.getDeclaredTypeOfSymbol(symbol);
+    push(declared);
+    push(context.checker.getApparentType(declared));
+  }
+
+  return candidates;
 }
 
 function reconcileGeneratedApiTopology(
@@ -1360,7 +1495,52 @@ function inferTypeFromExpressionSyntax(
     return { kind: "object", fields, open: false };
   }
   if (ts.isCallExpression(resolved)) {
+    const collectResult = inferCollectResultFromSchema(context, resolved);
+    if (collectResult) {
+      return collectResult;
+    }
+
+    const checkerWithPromiseHelpers = context.checker as ts.TypeChecker & {
+      getPromisedTypeOfPromise?(type: ts.Type): ts.Type | undefined;
+      getAwaitedType?(type: ts.Type): ts.Type | undefined;
+    };
+    const instantiatedType = unwrapAwaitedType(
+      checkerWithPromiseHelpers,
+      context.checker.getTypeAtLocation(resolved),
+    );
+    const instantiatedNode = typeToNode(
+      context,
+      instantiatedType,
+      sourceFile,
+      new Set(),
+    );
+    if (!matchesUnknownOrAny(instantiatedNode)) {
+      return instantiatedNode;
+    }
+
+    const signature = context.checker.getResolvedSignature(resolved);
+    const rawReturnType = signature
+      ? context.checker.getReturnTypeOfSignature(signature)
+      : context.checker.getTypeAtLocation(resolved);
+    const signatureNode = typeToNode(
+      context,
+      unwrapAwaitedType(checkerWithPromiseHelpers, rawReturnType),
+      sourceFile,
+      new Set(),
+    );
+    if (!matchesUnknownOrAny(signatureNode)) {
+      return signatureNode;
+    }
+
     const callee = expressionName(resolved.expression);
+    const firstArgument = resolved.arguments[0];
+    if (
+      callee.endsWith(".db.insert") &&
+      firstArgument &&
+      ts.isStringLiteralLike(firstArgument)
+    ) {
+      return { kind: "id", table: firstArgument.text };
+    }
     if (callee === "Date.now") {
       return { kind: "float64" };
     }
@@ -1453,8 +1633,104 @@ function inferTypeFromExpressionSyntax(
   return null;
 }
 
+function inferCollectResultFromSchema(
+  context: AnalyzerContext,
+  expression: ts.CallExpression,
+): TypeNode | null {
+  if (
+    !ts.isPropertyAccessExpression(expression.expression) ||
+    expression.expression.name.text !== "collect"
+  ) {
+    return null;
+  }
+
+  const queryTable = findQueryTableName(context, expression.expression.expression);
+  if (!queryTable) {
+    return null;
+  }
+
+  const table = context.tables.find((entry) => entry.name === queryTable);
+  if (!table) {
+    return null;
+  }
+
+  return {
+    kind: "array",
+    element: tableDocumentNode(table),
+  };
+}
+
+function findQueryTableName(
+  context: AnalyzerContext,
+  expression: ts.Expression,
+): string | null {
+  const resolved = deref(context, expression) ?? expression;
+  if (
+    ts.isCallExpression(resolved) &&
+    ts.isPropertyAccessExpression(resolved.expression)
+  ) {
+    if (
+      resolved.expression.name.text === "query" &&
+      resolved.arguments[0] &&
+      ts.isStringLiteralLike(resolved.arguments[0])
+    ) {
+      return resolved.arguments[0].text;
+    }
+
+    return findQueryTableName(context, resolved.expression.expression);
+  }
+
+  if (ts.isPropertyAccessExpression(resolved)) {
+    return findQueryTableName(context, resolved.expression);
+  }
+
+  return null;
+}
+
+function tableDocumentNode(table: Table): TypeNode {
+  if (table.document_type.kind !== "object") {
+    return table.document_type;
+  }
+
+  return {
+    kind: "object",
+    open: false,
+    fields: [
+      {
+        name: "_id",
+        required: true,
+        type: { kind: "id", table: table.name },
+        doc: null,
+        source: table.source,
+      },
+      {
+        name: "_creationTime",
+        required: true,
+        type: { kind: "float64" },
+        doc: null,
+        source: table.source,
+      },
+      ...table.document_type.fields,
+    ],
+  };
+}
+
 function matchesUnknownOrAny(node: TypeNode): boolean {
   return node.kind === "any" || node.kind === "unknown";
+}
+
+function unwrapAwaitedType(
+  checker: ts.TypeChecker & {
+    getPromisedTypeOfPromise?(type: ts.Type): ts.Type | undefined;
+    getAwaitedType?(type: ts.Type): ts.Type | undefined;
+  },
+  type: ts.Type,
+): ts.Type {
+  return (
+    checker.getAwaitedType?.(type) ??
+    checker.getPromisedTypeOfPromise?.(type) ??
+    type
+  );
 }
 
 function pascalCase(input: string): string {
@@ -1481,4 +1757,26 @@ function snippet(sourceFile: ts.SourceFile, node: ts.Node): string {
     .split(/\r?\n/)
     .slice(start, Math.min(end + 1, start + 3))
     .join("\n");
+}
+
+function readFileUtf8(filePath: string) {
+  return Effect.try({
+    try: () => fs.readFileSync(filePath, "utf8"),
+    catch: (cause) =>
+      new AnalyzerError({
+        message: `failed to read file ${filePath}`,
+        cause,
+      }),
+  });
+}
+
+function pathExists(filePath: string) {
+  return Effect.try({
+    try: () => fs.existsSync(filePath),
+    catch: (cause) =>
+      new AnalyzerError({
+        message: `failed to check path ${filePath}`,
+        cause,
+      }),
+  });
 }
