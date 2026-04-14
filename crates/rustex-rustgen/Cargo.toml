@@ -8,3 +8,4 @@ license.workspace = true
 anyhow.workspace = true
 rustex-project = { path = "../rustex-project" }
 rustex-ir = { path = "../rustex-ir" }
+log.workspace = true

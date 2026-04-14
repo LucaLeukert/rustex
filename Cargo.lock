@@ -1233,6 +1233,7 @@ name = "rustex-rustgen"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "log",
  "rustex-ir",
  "rustex-project",
 ]
