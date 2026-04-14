@@ -247,15 +247,15 @@ Config file:
 - [x] `check`
 - [x] `inspect`
 - [x] `diff`
-- [ ] `watch`
-- [ ] `init`
+- [x] `watch`
+- [x] `init`
 
 ### Project discovery
 
 - [x] Resolve project root, Convex root, and output directory from config
 - [x] Resolve analyzer script from the Rust workspace
-- [ ] Rich layout detection for unsupported project shapes
-- [ ] Monorepo/component-aware discovery
+- [x] Rich layout detection for unsupported project shapes
+- [x] Monorepo/component-aware discovery
 
 ### TypeScript analyzer
 
@@ -265,9 +265,9 @@ Config file:
 - [x] Effect-based control flow
 - [x] Effect-compatible CLI option parsing
 - [x] TypeScript `Program` creation and symbol resolution
-- [ ] Incremental compiler host / persistent cache
-- [ ] Explicit generated metadata reconciliation logic
-- [ ] TS-checker-based return inference
+- [x] Incremental compiler host / persistent cache
+- [x] Explicit generated metadata reconciliation logic
+- [x] TS-checker-based return inference
 
 ### Validator extraction
 
@@ -287,7 +287,7 @@ Config file:
 - [x] `v.optional`
 - [x] imported identifier dereferencing for statically reducible expressions
 - [x] object spread / shorthand flattening when statically resolvable
-- [ ] richer diagnostics for opaque helper abstractions
+- [x] richer diagnostics for opaque helper abstractions
 - [ ] recursive/advanced validator edge-case handling
 
 ### Convex surface extraction
@@ -301,9 +301,9 @@ Config file:
 - [x] `internalMutation` detection
 - [x] `internalAction` detection
 - [x] module/export based canonical function path construction
-- [ ] HTTP action extraction
-- [ ] component extraction
-- [ ] generated API topology reconciliation
+- [x] HTTP action extraction
+- [x] component extraction
+- [x] generated API topology reconciliation
 
 ### IR and manifest
 
@@ -313,9 +313,9 @@ Config file:
 - [x] origin/source spans
 - [x] diagnostics list
 - [x] manifest metadata with deterministic input hash
-- [ ] explicit constraint model
-- [ ] interned/shared named type graph
-- [ ] capability flags and source inventory
+- [x] explicit constraint model
+- [x] interned/shared named type graph
+- [x] capability flags and source inventory
 
 ### Rust backend
 
@@ -329,11 +329,11 @@ Config file:
 - [x] serde derives
 - [x] basic field renaming to snake_case
 - [x] `Option<T>` for optional/null unions when recognized
-- [ ] dedicated enum generation for literal unions
-- [ ] dedicated enum generation for discriminated unions
-- [ ] nested object extraction into named Rust types
-- [ ] stable collision handling beyond current simple casing strategy
-- [ ] feature flags / custom derives / custom attributes
+- [x] dedicated enum generation for literal unions
+- [x] dedicated enum generation for discriminated unions
+- [x] nested object extraction into named Rust types
+- [x] stable collision handling beyond current simple casing strategy
+- [x] feature flags / custom derives / custom attributes
 
 ### Diagnostics
 
@@ -342,7 +342,7 @@ Config file:
 - [x] warning for missing returns validator
 - [x] error for dynamic `v.id(...)`
 - [ ] broader diagnostic taxonomy from the master plan
-- [ ] human-friendly snippet rendering
+- [x] human-friendly snippet rendering
 - [ ] JSON/text parity guarantees across commands
 
 ### Outputs
@@ -352,9 +352,9 @@ Config file:
 - [x] `rustex.manifest.json`
 - [x] `rustex.diagnostics.json`
 - [x] generated runtime-facing typed API surface
-- [ ] source maps for generated symbol -> origin
-- [ ] JSON Schema output
-- [ ] OpenAPI-like output
+- [x] source maps for generated symbol -> origin
+- [x] JSON Schema output
+- [x] OpenAPI-like output
 
 ### Testing
 
@@ -363,18 +363,18 @@ Config file:
 - [x] `cargo test`
 - [x] runtime conversion tests
 - [x] smoke test coverage for generated typed API descriptors
-- [ ] golden tests for generated files
-- [ ] broader fixture corpus
+- [x] golden tests for generated files
+- [x] broader fixture corpus
 - [ ] compatibility matrix across Convex versions
-- [ ] generated Rust compile-check as part of automated tests
+- [x] generated Rust compile-check as part of automated tests
 
 ## Current Limits
 
-- Standard `convex/` layout only
+- Standard `convex/` layout plus common monorepo auto-discovery
 - Validator-first extraction only
-- No trustworthy handler-body return inference
-- Generated metadata is detected and version-tagged, but not deeply reconciled
-- Object and union codegen is intentionally conservative and still falls back to `serde_json::Value`
+- Handler-body return inference is available, but still fallback-oriented and less trustworthy than explicit validators
+- Generated metadata is reconciled at the API topology level, not yet deeply semantically merged
+- Object and union codegen is stronger for nested objects and common unions, but still falls back to `serde_json::Value` for unsupported shapes
 - No stable public customization surface yet
 - The runtime can only be as type-safe as the extracted/generated contracts
 
