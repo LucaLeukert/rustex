@@ -3,3 +3,4 @@
 /packages/ts-analyzer/node_modules
 /generated
 /.rustex-cache
+/.idea
