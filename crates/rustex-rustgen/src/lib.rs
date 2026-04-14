@@ -332,6 +332,51 @@ impl TypeGenerator {
         name
     }
 
+    fn push_untagged_enum_named(
+        &mut self,
+        name: &str,
+        variants: &[(String, Vec<RenderedField>)],
+    ) -> String {
+        let name = self.claim_name(name);
+        self.push_type_header(false);
+        self.items
+            .push(format!("{}#[serde(untagged)]\n", self.indent));
+        self.items
+            .push(format!("{}pub enum {name} {{\n", self.indent));
+        let mut used_variants = BTreeSet::new();
+        for (variant_name, fields) in variants {
+            let variant = dedupe_name(&mut used_variants, &sanitize_variant(variant_name));
+            if fields.is_empty() {
+                self.items
+                    .push(format!("{}    {},\n", self.indent, variant));
+            } else {
+                self.items
+                    .push(format!("{}    {} {{\n", self.indent, variant));
+                for field in fields {
+                    if field.rust_name != field.original_name {
+                        self.items.push(format!(
+                            "{}        #[serde(rename = \"{}\")]\n",
+                            self.indent, field.original_name
+                        ));
+                    }
+                    if !field.required {
+                        self.items.push(format!(
+                            "{}        #[serde(skip_serializing_if = \"Option::is_none\")]\n",
+                            self.indent
+                        ));
+                    }
+                    self.items.push(format!(
+                        "{}        {}: {},\n",
+                        self.indent, field.rust_name, field.ty
+                    ));
+                }
+                self.items.push(format!("{}    }},\n", self.indent));
+            }
+        }
+        self.items.push(format!("{}}}\n\n", self.indent));
+        name
+    }
+
     fn claim_name(&mut self, base: &str) -> String {
         let name = dedupe_name(&mut self.used_names, base);
         name
@@ -416,6 +461,20 @@ impl TypeGenerator {
             return self.push_discriminated_enum_named(hint, &tag, &rendered_variants);
         }
 
+        if let Some(variants) = object_union_members(members) {
+            let rendered_variants = variants
+                .into_iter()
+                .enumerate()
+                .map(|(index, fields)| {
+                    let variant_name = object_union_variant_name(&fields, index);
+                    let rendered =
+                        self.render_fields(&fields, &format!("{hint}Variant{}", index + 1));
+                    (variant_name, rendered)
+                })
+                .collect::<Vec<_>>();
+            return self.push_untagged_enum_named(hint, &rendered_variants);
+        }
+
         "serde_json::Value".into()
     }
 
@@ -444,11 +503,8 @@ impl TypeGenerator {
         self.items.push(format!("{}}}\n\n", self.indent));
     }
 
-    fn push_type_header(&mut self, is_struct: bool) {
-        let mut derives = vec!["Clone", "Debug", "Serialize", "Deserialize"];
-        if !is_struct {
-            derives.push("PartialEq");
-        }
+    fn push_type_header(&mut self, _is_struct: bool) {
+        let mut derives = vec!["Clone", "Debug", "Serialize", "Deserialize", "PartialEq"];
         for derive in &self.derives {
             derives.push(derive);
         }
@@ -538,6 +594,37 @@ fn discriminated_union_members(
     None
 }
 
+fn object_union_members(members: &[TypeNode]) -> Option<Vec<Vec<Field>>> {
+    let mut object_members = members
+        .iter()
+        .map(|member| match member {
+            TypeNode::Object { fields, .. } => Some(fields.clone()),
+            _ => None,
+        })
+        .collect::<Option<Vec<_>>>()?;
+    object_members.sort_by(|left, right| {
+        right
+            .len()
+            .cmp(&left.len())
+            .then_with(|| object_union_variant_name(left, 0).cmp(&object_union_variant_name(right, 0)))
+    });
+    Some(object_members)
+}
+
+fn object_union_variant_name(fields: &[Field], index: usize) -> String {
+    let joined = fields
+        .iter()
+        .map(|field| pascal_case(&field.name))
+        .filter(|name| !name.is_empty())
+        .collect::<Vec<_>>()
+        .join("");
+    if joined.is_empty() {
+        format!("Variant{}", index + 1)
+    } else {
+        joined
+    }
+}
+
 fn dedupe_name(used: &mut BTreeSet<String>, base: &str) -> String {
     if used.insert(base.to_string()) {
         return base.to_string();
@@ -613,4 +700,120 @@ fn module_ident(module_path: &str) -> String {
         .map(snake_case)
         .collect::<Vec<_>>()
         .join("_")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn renders_object_unions_as_untagged_enums() {
+        let mut generator = TypeGenerator::new(&RustexConfig::default());
+        let ty = TypeNode::Union {
+            members: vec![
+                TypeNode::Object {
+                    fields: vec![Field {
+                        name: "error".into(),
+                        required: true,
+                        r#type: TypeNode::String,
+                        doc: None,
+                        source: None,
+                    }],
+                    open: false,
+                },
+                TypeNode::Object {
+                    fields: vec![
+                        Field {
+                            name: "count".into(),
+                            required: true,
+                            r#type: TypeNode::Float64,
+                            doc: None,
+                            source: None,
+                        },
+                        Field {
+                            name: "error".into(),
+                            required: true,
+                            r#type: TypeNode::String,
+                            doc: None,
+                            source: None,
+                        },
+                    ],
+                    open: false,
+                },
+            ],
+        };
+
+        let rendered = generator.render_type(&ty, true, "MultiReturnDemoResponse");
+        let output = generator.finish();
+
+        assert_eq!(rendered, "MultiReturnDemoResponse");
+        assert!(output.contains("#[serde(untagged)]"));
+        assert!(output.contains("pub enum MultiReturnDemoResponse"));
+        assert!(output.contains("CountError {"));
+        assert!(output.contains("count: f64"));
+        assert!(output.contains("Error {"));
+        assert!(output.find("CountError {") < output.find("Error {"));
+    }
+
+    #[test]
+    fn renders_short_unique_nested_names_for_object_union_variants() {
+        let mut generator = TypeGenerator::new(&RustexConfig::default());
+        let ty = TypeNode::Union {
+            members: vec![
+                TypeNode::Object {
+                    fields: vec![Field {
+                        name: "error".into(),
+                        required: true,
+                        r#type: TypeNode::String,
+                        doc: None,
+                        source: None,
+                    }],
+                    open: false,
+                },
+                TypeNode::Object {
+                    fields: vec![
+                        Field {
+                            name: "messages".into(),
+                            required: true,
+                            r#type: TypeNode::Array {
+                                element: Box::new(TypeNode::Object {
+                                    fields: vec![Field {
+                                        name: "body".into(),
+                                        required: true,
+                                        r#type: TypeNode::String,
+                                        doc: None,
+                                        source: None,
+                                    }],
+                                    open: false,
+                                }),
+                            },
+                            doc: None,
+                            source: None,
+                        },
+                        Field {
+                            name: "count".into(),
+                            required: true,
+                            r#type: TypeNode::Float64,
+                            doc: None,
+                            source: None,
+                        },
+                        Field {
+                            name: "error".into(),
+                            required: true,
+                            r#type: TypeNode::String,
+                            doc: None,
+                            source: None,
+                        },
+                    ],
+                    open: false,
+                },
+            ],
+        };
+
+        generator.render_type(&ty, true, "MultiReturnDemoResponse");
+        let output = generator.finish();
+
+        assert!(output.contains("MultiReturnDemoResponseVariant1MessagesItem"));
+        assert!(!output.contains("MultiReturnDemoResponseMessagesCountErrorMessagesItem"));
+    }
 }

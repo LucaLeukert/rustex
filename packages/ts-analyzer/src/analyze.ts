@@ -165,9 +165,13 @@ const main = Effect.gen(function* () {
   );
   const convexVersion = detectConvexVersion(convexPackagePath, args.convexRoot);
   const schemaSource = pipe(
-    program.getSourceFiles().find((sf) =>
-      normalize(sf.fileName) === normalize(path.join(args.convexRoot, "schema.ts")),
-    ),
+    program
+      .getSourceFiles()
+      .find(
+        (sf) =>
+          normalize(sf.fileName) ===
+          normalize(path.join(args.convexRoot, "schema.ts")),
+      ),
     Option.fromNullable,
   );
 
@@ -224,25 +228,29 @@ const main = Effect.gen(function* () {
 
   yield* writeStdout(JSON.stringify(ir));
 }).pipe(
-  Effect.catchTag(
-    "AnalyzerError",
-    (error) =>
-      Effect.try({
-        try: () => {
-          console.error(error.message);
-          if (error.cause) {
-            console.error(error.cause);
-          }
-          process.exitCode = 1;
-        },
-        catch: (cause) =>
-          new AnalyzerError({ message: "failed to report analyzer error", cause }),
-      }),
+  Effect.catchTag("AnalyzerError", (error) =>
+    Effect.try({
+      try: () => {
+        console.error(error.message);
+        if (error.cause) {
+          console.error(error.cause);
+        }
+        process.exitCode = 1;
+      },
+      catch: (cause) =>
+        new AnalyzerError({
+          message: "failed to report analyzer error",
+          cause,
+        }),
+    }),
   ),
 );
 
 BunRuntime.runMain(
-  pipe(main, Effect.provide(Layer.mergeAll(CliConfig.defaultLayer, BunContext.layer))),
+  pipe(
+    main,
+    Effect.provide(Layer.mergeAll(CliConfig.defaultLayer, BunContext.layer)),
+  ),
 );
 
 function parseCliArgs(argv: string[]) {
@@ -284,7 +292,10 @@ function parseCliArgs(argv: string[]) {
     Effect.mapError((cause) =>
       cause instanceof AnalyzerError
         ? cause
-        : new AnalyzerError({ message: "failed to parse CLI arguments", cause }),
+        : new AnalyzerError({
+            message: "failed to parse CLI arguments",
+            cause,
+          }),
     ),
   );
 }
@@ -314,7 +325,10 @@ function parseTsConfig(convexRoot: string) {
       );
     },
     catch: (cause) =>
-      new AnalyzerError({ message: "failed to parse TypeScript config", cause }),
+      new AnalyzerError({
+        message: "failed to parse TypeScript config",
+        cause,
+      }),
   });
 }
 
@@ -345,7 +359,10 @@ function detectConvexVersion(convexPackagePath: string, convexRoot: string) {
           return match?.[1] ?? null;
         },
         catch: (cause) =>
-          new AnalyzerError({ message: "failed to detect Convex version", cause }),
+          new AnalyzerError({
+            message: "failed to detect Convex version",
+            cause,
+          }),
       }),
     ),
   );
@@ -395,7 +412,10 @@ function walk(dir: string, visit: (file: string) => void): void {
   }
 }
 
-function extractSchema(context: AnalyzerContext, sourceFile: ts.SourceFile): Table[] {
+function extractSchema(
+  context: AnalyzerContext,
+  sourceFile: ts.SourceFile,
+): Table[] {
   const tables: Table[] = [];
   sourceFile.forEachChild((node) => {
     if (
@@ -444,7 +464,8 @@ function extractFunctions(context: AnalyzerContext): FunctionEntry[] {
     sourceFile.forEachChild((node) => {
       if (!ts.isVariableStatement(node) || !hasExport(node)) return;
       for (const declaration of node.declarationList.declarations) {
-        if (!ts.isIdentifier(declaration.name) || !declaration.initializer) continue;
+        if (!ts.isIdentifier(declaration.name) || !declaration.initializer)
+          continue;
         const init = deref(context, declaration.initializer);
         if (!init || !ts.isCallExpression(init)) continue;
         const fnKind = FUNCTION_KIND_MAP[expressionName(init.expression)];
@@ -512,7 +533,9 @@ function extractFunctions(context: AnalyzerContext): FunctionEntry[] {
           ).replace(/\.ts$/, ""),
           export_name: declaration.name.text,
           component_path: componentPathForModule(
-            normalize(path.relative(context.convexRoot, sourceFile.fileName)).replace(/\.ts$/, ""),
+            normalize(
+              path.relative(context.convexRoot, sourceFile.fileName),
+            ).replace(/\.ts$/, ""),
           ),
           visibility: fnKind.visibility,
           kind: fnKind.kind,
@@ -787,7 +810,9 @@ function isOptionalValidator(
 ): boolean {
   const expr = deref(context, expression);
   return Boolean(
-    expr && ts.isCallExpression(expr) && expressionName(expr.expression) === "v.optional",
+    expr &&
+    ts.isCallExpression(expr) &&
+    expressionName(expr.expression) === "v.optional",
   );
 }
 
@@ -821,6 +846,17 @@ function resolveIdentifierValue(
     }
     if (ts.isPropertyAssignment(decl)) {
       return deref(context, decl.initializer);
+    }
+    if (ts.isShorthandPropertyAssignment(decl)) {
+      const resolved = context.checker.getShorthandAssignmentValueSymbol(decl);
+      if (
+        resolved &&
+        resolved.valueDeclaration &&
+        ts.isVariableDeclaration(resolved.valueDeclaration) &&
+        resolved.valueDeclaration.initializer
+      ) {
+        return deref(context, resolved.valueDeclaration.initializer);
+      }
     }
   }
   return undefined;
@@ -875,7 +911,10 @@ function componentPathForModule(modulePath: string): string | null {
 
 function discoverComponentRoots(convexRoot: string): string[] {
   const componentsRoot = path.join(convexRoot, "components");
-  if (!fs.existsSync(componentsRoot) || !fs.statSync(componentsRoot).isDirectory()) {
+  if (
+    !fs.existsSync(componentsRoot) ||
+    !fs.statSync(componentsRoot).isDirectory()
+  ) {
     return [];
   }
   return fs
@@ -885,7 +924,9 @@ function discoverComponentRoots(convexRoot: string): string[] {
     .sort();
 }
 
-function buildSourceInventory(convexRoot: string): Array<{ path: string; kind: string }> {
+function buildSourceInventory(
+  convexRoot: string,
+): Array<{ path: string; kind: string }> {
   const items: Array<{ path: string; kind: string }> = [];
   walk(convexRoot, (file) => {
     const normalized = normalize(file);
@@ -916,7 +957,8 @@ function inferHandlerReturnType(
     pushDiagnostic(context, {
       code: "RX050",
       severity: "warning",
-      message: "Return inference skipped because the handler is not a function expression",
+      message:
+        "Return inference skipped because the handler is not a function expression",
       symbol: null,
       provenance: "inferred",
       suggestion:
@@ -928,7 +970,11 @@ function inferHandlerReturnType(
     return null;
   }
 
-  const syntaxReturn = inferHandlerReturnFromSyntax(context, resolved, sourceFile);
+  const syntaxReturn = inferHandlerReturnFromSyntax(
+    context,
+    resolved,
+    sourceFile,
+  );
   if (syntaxReturn && !matchesUnknownOrAny(syntaxReturn)) {
     return syntaxReturn;
   }
@@ -963,7 +1009,11 @@ function inferHandlerReturnFromSyntax(
   const returns: TypeNode[] = [];
   const visit = (node: ts.Node) => {
     if (ts.isReturnStatement(node) && node.expression) {
-      const inferred = inferTypeFromExpressionSyntax(context, node.expression, sourceFile);
+      const inferred = inferTypeFromExpressionSyntax(
+        context,
+        node.expression,
+        sourceFile,
+      );
       if (inferred) {
         returns.push(inferred);
       }
@@ -1076,14 +1126,23 @@ function typeToNode(
     const fields = properties
       .filter((prop) => prop.getName() !== "_id" || true)
       .map((prop) => {
-        const propertyDeclaration =
-          [prop.valueDeclaration, ...(prop.declarations ?? [])].find((decl): decl is ts.PropertyAssignment =>
-            Boolean(decl && ts.isPropertyAssignment(decl)),
-          );
+        const propertyDeclaration = [
+          prop.valueDeclaration,
+          ...(prop.declarations ?? []),
+        ].find((decl): decl is ts.PropertyAssignment =>
+          Boolean(decl && ts.isPropertyAssignment(decl)),
+        );
         const declaration =
-          propertyDeclaration ?? prop.valueDeclaration ?? prop.declarations?.[0] ?? sourceFile;
+          propertyDeclaration ??
+          prop.valueDeclaration ??
+          prop.declarations?.[0] ??
+          sourceFile;
         const syntaxType = propertyDeclaration
-          ? inferTypeFromExpressionSyntax(context, propertyDeclaration.initializer, sourceFile)
+          ? inferTypeFromExpressionSyntax(
+              context,
+              propertyDeclaration.initializer,
+              sourceFile,
+            )
           : null;
         const valueType = propertyDeclaration
           ? context.checker.getTypeAtLocation(propertyDeclaration.initializer)
@@ -1099,7 +1158,10 @@ function typeToNode(
           name: prop.getName(),
           required: !optional,
           type: inferredType,
-          doc: ts.displayPartsToString(prop.getDocumentationComment(context.checker)) || null,
+          doc:
+            ts.displayPartsToString(
+              prop.getDocumentationComment(context.checker),
+            ) || null,
           source: declaration ? origin(sourceFile, declaration) : null,
         } satisfies Field;
       });
@@ -1125,7 +1187,11 @@ function reconcileGeneratedApiTopology(
   context: AnalyzerContext,
   functions: FunctionEntry[],
 ): void {
-  const generatedApiPath = path.join(context.convexRoot, "_generated", "api.d.ts");
+  const generatedApiPath = path.join(
+    context.convexRoot,
+    "_generated",
+    "api.d.ts",
+  );
   if (!fs.existsSync(generatedApiPath)) {
     return;
   }
@@ -1141,8 +1207,15 @@ function reconcileGeneratedApiTopology(
     .filter(ts.isImportDeclaration)
     .map((statement) => statement.moduleSpecifier)
     .filter(ts.isStringLiteralLike)
-    .map((specifier) => normalize(specifier.text).replace(/^\.\.\//, "").replace(/\.js$/, ""))
-    .filter((modulePath) => modulePath !== "_generated/server" && modulePath !== "_generated/api")
+    .map((specifier) =>
+      normalize(specifier.text)
+        .replace(/^\.\.\//, "")
+        .replace(/\.js$/, ""),
+    )
+    .filter(
+      (modulePath) =>
+        modulePath !== "_generated/server" && modulePath !== "_generated/api",
+    )
     .sort();
 
   const extractedModules = Array.from(
@@ -1189,7 +1262,9 @@ function reconcileGeneratedApiTopology(
 }
 
 function origin(sourceFile: ts.SourceFile, node: ts.Node): Origin {
-  const pos = sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile));
+  const pos = sourceFile.getLineAndCharacterOfPosition(
+    node.getStart(sourceFile),
+  );
   return {
     file: normalize(sourceFile.fileName),
     line: pos.line + 1,
@@ -1208,8 +1283,16 @@ function inferTypeFromExpressionSyntax(
 ): TypeNode | null {
   const resolved = deref(context, expression) ?? expression;
 
-  if (ts.isParenthesizedExpression(resolved) || ts.isAsExpression(resolved) || ts.isSatisfiesExpression(resolved)) {
-    return inferTypeFromExpressionSyntax(context, resolved.expression, sourceFile);
+  if (
+    ts.isParenthesizedExpression(resolved) ||
+    ts.isAsExpression(resolved) ||
+    ts.isSatisfiesExpression(resolved)
+  ) {
+    return inferTypeFromExpressionSyntax(
+      context,
+      resolved.expression,
+      sourceFile,
+    );
   }
   if (ts.isStringLiteralLike(resolved)) return { kind: "string" };
   if (ts.isNumericLiteral(resolved)) return { kind: "float64" };
@@ -1221,15 +1304,58 @@ function inferTypeFromExpressionSyntax(
   }
   if (ts.isObjectLiteralExpression(resolved)) {
     const fields = resolved.properties.flatMap((prop) => {
-      if (!ts.isPropertyAssignment(prop)) return [];
-      const name = propertyName(prop.name);
-      return [{
-        name,
-        required: true,
-        type: inferTypeFromExpressionSyntax(context, prop.initializer, sourceFile) ?? unknown("expression_property"),
-        doc: null,
-        source: origin(sourceFile, prop),
-      } satisfies Field];
+      if (ts.isPropertyAssignment(prop)) {
+        const name = propertyName(prop.name);
+        return [
+          {
+            name,
+            required: true,
+            type:
+              inferTypeFromExpressionSyntax(
+                context,
+                prop.initializer,
+                sourceFile,
+              ) ?? unknown("expression_property"),
+            doc: null,
+            source: origin(sourceFile, prop),
+          } satisfies Field,
+        ];
+      } else if (ts.isShorthandPropertyAssignment(prop)) {
+        const resolved = resolveIdentifierValue(context, prop.name);
+        const inferred = resolved
+          ? inferTypeFromExpressionSyntax(context, resolved, sourceFile)
+          : null;
+        if (inferred?.kind === "object") {
+          return [
+            {
+              name: prop.name.text,
+              required: true,
+              type: inferred,
+              doc: null,
+              source: origin(sourceFile, prop),
+            } satisfies Field,
+          ];
+        }
+        return inferred
+          ? [
+              {
+                name: prop.name.text,
+                required: true,
+                type: inferred,
+                doc: null,
+                source: origin(sourceFile, prop),
+              } satisfies Field,
+            ]
+          : [];
+      } else if (ts.isSpreadAssignment(prop)) {
+        const resolved = deref(context, prop.expression);
+        const inferred = resolved
+          ? inferTypeFromExpressionSyntax(context, resolved, sourceFile)
+          : null;
+        return inferred?.kind === "object" ? inferred.fields : [];
+      } else {
+        return [];
+      }
     });
     return { kind: "object", fields, open: false };
   }
@@ -1242,7 +1368,9 @@ function inferTypeFromExpressionSyntax(
   if (ts.isArrayLiteralExpression(resolved)) {
     const members = resolved.elements
       .filter(ts.isExpression)
-      .map((element) => inferTypeFromExpressionSyntax(context, element, sourceFile))
+      .map((element) =>
+        inferTypeFromExpressionSyntax(context, element, sourceFile),
+      )
       .filter((node): node is TypeNode => node !== null);
     const element =
       members.length === 0
@@ -1252,22 +1380,46 @@ function inferTypeFromExpressionSyntax(
           : { kind: "union" as const, members };
     return { kind: "array", element };
   }
-  if (ts.isPropertyAccessExpression(resolved) && resolved.name.text === "length") {
+  if (
+    ts.isPropertyAccessExpression(resolved) &&
+    resolved.name.text === "length"
+  ) {
     return { kind: "float64" };
   }
-  if (ts.isIdentifier(resolved) || ts.isPropertyAccessExpression(resolved) || ts.isElementAccessExpression(resolved)) {
+  if (ts.isAwaitExpression(resolved)) {
+    const checkerType = context.checker.getTypeAtLocation(resolved);
+    const fromChecker = typeToNode(context, checkerType, sourceFile, new Set());
+    if (!matchesUnknownOrAny(fromChecker)) {
+      return fromChecker;
+    }
+    return inferTypeFromExpressionSyntax(
+      context,
+      resolved.expression,
+      sourceFile,
+    );
+  }
+  if (
+    ts.isIdentifier(resolved) ||
+    ts.isPropertyAccessExpression(resolved) ||
+    ts.isElementAccessExpression(resolved)
+  ) {
     const checkerType = context.checker.getTypeAtLocation(resolved);
     const fromChecker = typeToNode(context, checkerType, sourceFile, new Set());
     if (!matchesUnknownOrAny(fromChecker)) {
       return fromChecker;
     }
   }
-  if (ts.isAwaitExpression(resolved)) {
-    return inferTypeFromExpressionSyntax(context, resolved.expression, sourceFile);
-  }
   if (ts.isConditionalExpression(resolved)) {
-    const whenTrue = inferTypeFromExpressionSyntax(context, resolved.whenTrue, sourceFile);
-    const whenFalse = inferTypeFromExpressionSyntax(context, resolved.whenFalse, sourceFile);
+    const whenTrue = inferTypeFromExpressionSyntax(
+      context,
+      resolved.whenTrue,
+      sourceFile,
+    );
+    const whenFalse = inferTypeFromExpressionSyntax(
+      context,
+      resolved.whenFalse,
+      sourceFile,
+    );
     if (whenTrue && whenFalse) {
       return { kind: "union", members: [whenTrue, whenFalse] };
     }
@@ -1284,11 +1436,18 @@ function inferTypeFromExpressionSyntax(
     if (
       resolved.operatorToken.kind === ts.SyntaxKind.EqualsEqualsEqualsToken ||
       resolved.operatorToken.kind === ts.SyntaxKind.EqualsEqualsToken ||
-      resolved.operatorToken.kind === ts.SyntaxKind.ExclamationEqualsEqualsToken ||
+      resolved.operatorToken.kind ===
+        ts.SyntaxKind.ExclamationEqualsEqualsToken ||
       resolved.operatorToken.kind === ts.SyntaxKind.ExclamationEqualsToken
     ) {
       return { kind: "boolean" };
     }
+  }
+
+  const checkerType = context.checker.getTypeAtLocation(resolved);
+  const fromChecker = typeToNode(context, checkerType, sourceFile, new Set());
+  if (!matchesUnknownOrAny(fromChecker)) {
+    return fromChecker;
   }
 
   return null;
@@ -1306,12 +1465,17 @@ function pascalCase(input: string): string {
     .join("");
 }
 
-function pushDiagnostic(context: AnalyzerContext, diagnostic: Diagnostic): void {
+function pushDiagnostic(
+  context: AnalyzerContext,
+  diagnostic: Diagnostic,
+): void {
   context.diagnostics.push(diagnostic);
 }
 
 function snippet(sourceFile: ts.SourceFile, node: ts.Node): string {
-  const start = sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile)).line;
+  const start = sourceFile.getLineAndCharacterOfPosition(
+    node.getStart(sourceFile),
+  ).line;
   const end = sourceFile.getLineAndCharacterOfPosition(node.getEnd()).line;
   return sourceFile.text
     .split(/\r?\n/)
