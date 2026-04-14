@@ -1,0 +1,62 @@
+[
+  {
+    "code": "RX022",
+    "severity": "warning",
+    "message": "Function add has no returns validator; inferring response contract from the TypeScript checker",
+    "symbol": "add",
+    "provenance": "inferred",
+    "suggestion": "Add a returns validator to make the inferred contract explicit and stable.",
+    "primary_span": {
+      "file": "/Users/lucaleukert/src/rustex/example/convex/messages.ts",
+      "line": 4,
+      "column": 14
+    },
+    "related_spans": [],
+    "snippet": "export const add = mutation({\n  args: { author: v.string(), body: v.string() },\n  handler: async (ctx, { author, body }) => {"
+  },
+  {
+    "code": "RX010",
+    "severity": "warning",
+    "message": "Function collect has no args validator",
+    "symbol": "collect",
+    "provenance": "source",
+    "suggestion": "Add an args validator to enable request contract generation.",
+    "primary_span": {
+      "file": "/Users/lucaleukert/src/rustex/example/convex/messages.ts",
+      "line": 11,
+      "column": 14
+    },
+    "related_spans": [],
+    "snippet": "export const collect = query({\n  handler: async (ctx) => {\n    return await ctx.db.query(\"messages\").collect();"
+  },
+  {
+    "code": "RX022",
+    "severity": "warning",
+    "message": "Function collect has no returns validator; inferring response contract from the TypeScript checker",
+    "symbol": "collect",
+    "provenance": "inferred",
+    "suggestion": "Add a returns validator to make the inferred contract explicit and stable.",
+    "primary_span": {
+      "file": "/Users/lucaleukert/src/rustex/example/convex/messages.ts",
+      "line": 11,
+      "column": 14
+    },
+    "related_spans": [],
+    "snippet": "export const collect = query({\n  handler: async (ctx) => {\n    return await ctx.db.query(\"messages\").collect();"
+  },
+  {
+    "code": "RX061",
+    "severity": "note",
+    "message": "Generated Convex API metadata references module convex/server, but Rustex did not extract any functions from it",
+    "symbol": "convex/server",
+    "provenance": "generated_ts",
+    "suggestion": "Check for unsupported component or helper patterns in that module, or remove stale generated metadata.",
+    "primary_span": {
+      "file": "/Users/lucaleukert/src/rustex/example/convex/_generated/api.d.ts",
+      "line": 12,
+      "column": 1
+    },
+    "related_spans": [],
+    "snippet": "import type {\n  ApiFromModules,\n  FilterApi,"
+  }
+]
