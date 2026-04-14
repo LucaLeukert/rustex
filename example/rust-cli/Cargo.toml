@@ -1,0 +1,19 @@
+[package]
+name = "rustex-example-cli"
+version = "0.1.0"
+edition = "2024"
+
+[workspace]
+
+[dependencies]
+anyhow = "1"
+clap = { version = "4", features = ["derive", "env"] }
+convex = "0.10.4"
+dotenvy = "0.15"
+futures-util = "0.3"
+rustex-runtime = { path = "../../crates/rustex-runtime" }
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
+
+[dependencies.example_api]
+package = "rustex-generated"
+path = "../convex/_rustex/rust"
