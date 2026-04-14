@@ -10,4 +10,6 @@ camino.workspace = true
 rustex-ir = { path = "../rustex-ir" }
 serde.workspace = true
 serde_json.workspace = true
-
+sha2.workspace = true
+walkdir.workspace = true
+log.workspace = true

@@ -25,6 +25,7 @@ type Diagnostic = {
   suggestion: string | null;
   primary_span: Origin | null;
   related_spans: Origin[];
+  snippet: string | null;
 };
 
 type Field = {
@@ -64,6 +65,7 @@ type FunctionEntry = {
   canonical_path: string;
   module_path: string;
   export_name: string;
+  component_path: string | null;
   visibility: Visibility;
   kind: FunctionKind;
   args_type: TypeNode | null;
@@ -79,9 +81,22 @@ type IrPackage = {
     convex_root: string;
     convex_version: string | null;
     generated_metadata_present: boolean;
+    discovered_convex_roots: string[];
+    component_roots: string[];
   };
   tables: Table[];
   functions: FunctionEntry[];
+  named_types: unknown[];
+  constraints: unknown[];
+  capabilities: {
+    generated_metadata_present: boolean;
+    inferred_returns_used: boolean;
+    internal_functions_present: boolean;
+    public_functions_present: boolean;
+    http_actions_present: boolean;
+    components_present: boolean;
+  };
+  source_inventory: Array<{ path: string; kind: string }>;
   diagnostics: Diagnostic[];
   manifest_meta: {
     rustex_version: string;
@@ -101,6 +116,7 @@ type AnalyzerContext = {
   readonly checker: ts.TypeChecker;
   readonly program: ts.Program;
   readonly diagnostics: Diagnostic[];
+  readonly allowInferredReturns: boolean;
 };
 
 const FUNCTION_KIND_MAP: Record<
@@ -110,6 +126,7 @@ const FUNCTION_KIND_MAP: Record<
   query: { kind: "query", visibility: "public" },
   mutation: { kind: "mutation", visibility: "public" },
   action: { kind: "action", visibility: "public" },
+  httpAction: { kind: "action", visibility: "public" },
   internalQuery: { kind: "query", visibility: "internal" },
   internalMutation: { kind: "mutation", visibility: "internal" },
   internalAction: { kind: "action", visibility: "internal" },
@@ -140,6 +157,7 @@ const main = Effect.gen(function* () {
     checker: program.getTypeChecker(),
     program,
     diagnostics: [],
+    allowInferredReturns: args.allowInferredReturns,
   };
 
   const packageJson = readJsonFile(packageJsonPath).pipe(
@@ -178,9 +196,24 @@ const main = Effect.gen(function* () {
       generated_metadata_present: fs.existsSync(
         path.join(args.convexRoot, "_generated", "api.d.ts"),
       ),
+      discovered_convex_roots: [normalize(args.convexRoot)],
+      component_roots: discoverComponentRoots(args.convexRoot),
     },
     tables,
     functions: extractFunctions(context),
+    named_types: [],
+    constraints: [],
+    capabilities: {
+      generated_metadata_present: fs.existsSync(
+        path.join(args.convexRoot, "_generated", "api.d.ts"),
+      ),
+      inferred_returns_used: false,
+      internal_functions_present: false,
+      public_functions_present: false,
+      http_actions_present: false,
+      components_present: false,
+    },
+    source_inventory: buildSourceInventory(args.convexRoot),
     diagnostics: context.diagnostics,
     manifest_meta: {
       rustex_version: "0.1.0",
@@ -213,6 +246,8 @@ BunRuntime.runMain(
 );
 
 function parseCliArgs(argv: string[]) {
+  const allowInferredReturns = argv.includes("--allow-inferred-returns");
+  const filteredArgv = argv.filter((arg) => arg !== "--allow-inferred-returns");
   const parser = Options.all({
     projectRoot: pipe(
       Options.text("project-root"),
@@ -227,7 +262,7 @@ function parseCliArgs(argv: string[]) {
   });
 
   return pipe(
-    Options.processCommandLine(parser, argv, CliConfig.defaultConfig),
+    Options.processCommandLine(parser, filteredArgv, CliConfig.defaultConfig),
     Effect.map(([validationError, leftover, parsed]) => {
       if (Option.isSome(validationError)) {
         throw new AnalyzerError({
@@ -243,6 +278,7 @@ function parseCliArgs(argv: string[]) {
       return {
         projectRoot: path.resolve(parsed.projectRoot),
         convexRoot: path.resolve(parsed.convexRoot),
+        allowInferredReturns,
       };
     }),
     Effect.mapError((cause) =>
@@ -414,11 +450,23 @@ function extractFunctions(context: AnalyzerContext): FunctionEntry[] {
         const fnKind = FUNCTION_KIND_MAP[expressionName(init.expression)];
         if (!fnKind) continue;
         const objectArg = deref(context, init.arguments[0]);
-        if (!objectArg || !ts.isObjectLiteralExpression(objectArg)) continue;
-        const argsProp = findProp(objectArg, "args");
-        const returnsProp = findProp(objectArg, "returns");
+        if (!objectArg || !ts.isObjectLiteralExpression(objectArg)) {
+          if (expressionName(init.expression) !== "httpAction") continue;
+        }
+        const handler =
+          objectArg && ts.isObjectLiteralExpression(objectArg)
+            ? findFunctionProp(objectArg, "handler")
+            : init.arguments[0];
+        const argsProp =
+          objectArg && ts.isObjectLiteralExpression(objectArg)
+            ? findProp(objectArg, "args")
+            : undefined;
+        const returnsProp =
+          objectArg && ts.isObjectLiteralExpression(objectArg)
+            ? findProp(objectArg, "returns")
+            : undefined;
 
-        if (!argsProp) {
+        if (!argsProp && expressionName(init.expression) !== "httpAction") {
           pushDiagnostic(context, {
             code: "RX010",
             severity: "warning",
@@ -429,22 +477,33 @@ function extractFunctions(context: AnalyzerContext): FunctionEntry[] {
               "Add an args validator to enable request contract generation.",
             primary_span: origin(sourceFile, declaration),
             related_spans: [],
+            snippet: snippet(sourceFile, declaration),
           });
         }
 
         if (!returnsProp) {
+          const canInfer = context.allowInferredReturns && handler;
           pushDiagnostic(context, {
-            code: "RX021",
+            code: canInfer ? "RX022" : "RX021",
             severity: "warning",
-            message: `Function ${declaration.name.text} has no returns validator; response contract is lossy`,
+            message: canInfer
+              ? `Function ${declaration.name.text} has no returns validator; inferring response contract from the TypeScript checker`
+              : `Function ${declaration.name.text} has no returns validator; response contract is lossy`,
             symbol: declaration.name.text,
-            provenance: "source",
-            suggestion:
-              "Add a returns validator to enable strong response contract generation.",
+            provenance: canInfer ? "inferred" : "source",
+            suggestion: canInfer
+              ? "Add a returns validator to make the inferred contract explicit and stable."
+              : "Add a returns validator to enable strong response contract generation.",
             primary_span: origin(sourceFile, declaration),
             related_spans: [],
+            snippet: snippet(sourceFile, declaration),
           });
         }
+
+        const inferredReturns =
+          !returnsProp && context.allowInferredReturns && handler
+            ? inferHandlerReturnType(context, handler, sourceFile)
+            : null;
 
         items.push({
           canonical_path: `${path.basename(sourceFile.fileName, ".ts")}:${declaration.name.text}`,
@@ -452,6 +511,9 @@ function extractFunctions(context: AnalyzerContext): FunctionEntry[] {
             path.relative(context.convexRoot, sourceFile.fileName),
           ).replace(/\.ts$/, ""),
           export_name: declaration.name.text,
+          component_path: componentPathForModule(
+            normalize(path.relative(context.convexRoot, sourceFile.fileName)).replace(/\.ts$/, ""),
+          ),
           visibility: fnKind.visibility,
           kind: fnKind.kind,
           args_type: argsProp
@@ -459,13 +521,18 @@ function extractFunctions(context: AnalyzerContext): FunctionEntry[] {
             : null,
           returns_type: returnsProp
             ? parseValidator(context, returnsProp.initializer, sourceFile)
-            : null,
-          contract_provenance: returnsProp ? "validator" : "missing",
+            : inferredReturns,
+          contract_provenance: returnsProp
+            ? "validator"
+            : inferredReturns
+              ? "inferred"
+              : "missing",
           source: origin(sourceFile, declaration),
         });
       }
     });
   }
+  reconcileGeneratedApiTopology(context, items);
   return items.sort((left, right) =>
     left.canonical_path.localeCompare(right.canonical_path),
   );
@@ -540,6 +607,7 @@ function parseValidator(
           suggestion: "Use a string literal table name in v.id(...).",
           primary_span: origin(sourceFile, expr),
           related_spans: [],
+          snippet: snippet(sourceFile, expr),
         });
         return unknown("dynamic_validator");
       }
@@ -571,11 +639,37 @@ function parseValidator(
           ],
         };
       default:
+        pushDiagnostic(context, {
+          code: "RX040",
+          severity: "warning",
+          message: `Unsupported validator helper ${callee}; falling back to an unknown contract`,
+          symbol: null,
+          provenance: "source",
+          suggestion:
+            "Inline the validator expression or export a statically analyzable object/validator literal.",
+          primary_span: origin(sourceFile, expr),
+          related_spans: [],
+          snippet: snippet(sourceFile, expr),
+        });
         return unknown(`unsupported call ${callee}`);
     }
   }
   if (ts.isObjectLiteralExpression(expr)) {
     return parseObjectValidator(context, expr, sourceFile);
+  }
+  if (ts.isIdentifier(expr)) {
+    pushDiagnostic(context, {
+      code: "RX041",
+      severity: "warning",
+      message: `Opaque helper ${expr.text} could not be resolved statically`,
+      symbol: expr.text,
+      provenance: "source",
+      suggestion:
+        "Export a concrete validator value or inline the helper where the contract is declared.",
+      primary_span: origin(sourceFile, expr),
+      related_spans: [],
+      snippet: snippet(sourceFile, expr),
+    });
   }
   return unknown(`unsupported expression ${ts.SyntaxKind[expr.kind]}`);
 }
@@ -612,6 +706,19 @@ function parseObjectValidator(
         if (nested.kind === "object") {
           fields.push(...nested.fields);
         }
+      } else {
+        pushDiagnostic(context, {
+          code: "RX042",
+          severity: "warning",
+          message: `Shorthand helper ${prop.name.text} did not resolve to a static object literal`,
+          symbol: prop.name.text,
+          provenance: "source",
+          suggestion:
+            "Expand the shorthand helper inline if you want Rustex to recover its fields.",
+          primary_span: origin(sourceFile, prop),
+          related_spans: [],
+          snippet: snippet(sourceFile, prop),
+        });
       }
       continue;
     }
@@ -623,6 +730,19 @@ function parseObjectValidator(
         if (nested.kind === "object") {
           fields.push(...nested.fields);
         }
+      } else {
+        pushDiagnostic(context, {
+          code: "RX043",
+          severity: "warning",
+          message: "Spread helper did not resolve to a static object literal",
+          symbol: null,
+          provenance: "source",
+          suggestion:
+            "Replace the spread with a literal object shape or an imported constant that resolves to one.",
+          primary_span: origin(sourceFile, prop),
+          related_spans: [],
+          snippet: snippet(sourceFile, prop),
+        });
       }
     }
   }
@@ -737,6 +857,337 @@ function hasExport(node: ts.VariableStatement): boolean {
   );
 }
 
+function findFunctionProp(
+  objectLiteral: ts.ObjectLiteralExpression,
+  name: string,
+): ts.Expression | undefined {
+  const prop = findProp(objectLiteral, name);
+  return prop?.initializer;
+}
+
+function componentPathForModule(modulePath: string): string | null {
+  if (!modulePath.startsWith("components/")) {
+    return null;
+  }
+  const parts = modulePath.split("/");
+  return parts.length >= 3 ? parts.slice(0, 2).join("/") : "components";
+}
+
+function discoverComponentRoots(convexRoot: string): string[] {
+  const componentsRoot = path.join(convexRoot, "components");
+  if (!fs.existsSync(componentsRoot) || !fs.statSync(componentsRoot).isDirectory()) {
+    return [];
+  }
+  return fs
+    .readdirSync(componentsRoot, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => normalize(path.join(componentsRoot, entry.name)))
+    .sort();
+}
+
+function buildSourceInventory(convexRoot: string): Array<{ path: string; kind: string }> {
+  const items: Array<{ path: string; kind: string }> = [];
+  walk(convexRoot, (file) => {
+    const normalized = normalize(file);
+    if (normalized.endsWith("/schema.ts")) {
+      items.push({ path: normalized, kind: "schema" });
+    } else if (normalized.includes("/_generated/")) {
+      items.push({ path: normalized, kind: "generated_metadata" });
+    } else if (normalized.includes("/components/")) {
+      items.push({ path: normalized, kind: "component_module" });
+    } else if (normalized.endsWith(".ts") || normalized.endsWith(".tsx")) {
+      items.push({ path: normalized, kind: "function_module" });
+    }
+  });
+  return items.sort((left, right) => left.path.localeCompare(right.path));
+}
+
+function inferHandlerReturnType(
+  context: AnalyzerContext,
+  handler: ts.Expression,
+  sourceFile: ts.SourceFile,
+): TypeNode | null {
+  const resolved = deref(context, handler) ?? handler;
+  if (
+    !ts.isArrowFunction(resolved) &&
+    !ts.isFunctionExpression(resolved) &&
+    !ts.isMethodDeclaration(resolved)
+  ) {
+    pushDiagnostic(context, {
+      code: "RX050",
+      severity: "warning",
+      message: "Return inference skipped because the handler is not a function expression",
+      symbol: null,
+      provenance: "inferred",
+      suggestion:
+        "Keep the handler inline or add a returns validator to make the response contract explicit.",
+      primary_span: origin(sourceFile, resolved),
+      related_spans: [],
+      snippet: snippet(sourceFile, resolved),
+    });
+    return null;
+  }
+
+  const syntaxReturn = inferHandlerReturnFromSyntax(context, resolved, sourceFile);
+  if (syntaxReturn && !matchesUnknownOrAny(syntaxReturn)) {
+    return syntaxReturn;
+  }
+
+  const signature = context.checker.getSignatureFromDeclaration(resolved);
+  const rawType = signature
+    ? context.checker.getReturnTypeOfSignature(signature)
+    : context.checker.getTypeAtLocation(resolved);
+  const checkerWithPromiseHelpers = context.checker as ts.TypeChecker & {
+    getPromisedTypeOfPromise?(type: ts.Type): ts.Type | undefined;
+    getAwaitedType?(type: ts.Type): ts.Type | undefined;
+  };
+  const awaited =
+    checkerWithPromiseHelpers.getAwaitedType?.(rawType) ??
+    checkerWithPromiseHelpers.getPromisedTypeOfPromise?.(rawType) ??
+    rawType;
+  return typeToNode(context, awaited, sourceFile, new Set());
+}
+
+function inferHandlerReturnFromSyntax(
+  context: AnalyzerContext,
+  handler: ts.ArrowFunction | ts.FunctionExpression | ts.MethodDeclaration,
+  sourceFile: ts.SourceFile,
+): TypeNode | null {
+  if (!handler.body) {
+    return null;
+  }
+  if (ts.isExpression(handler.body)) {
+    return inferTypeFromExpressionSyntax(context, handler.body, sourceFile);
+  }
+
+  const returns: TypeNode[] = [];
+  const visit = (node: ts.Node) => {
+    if (ts.isReturnStatement(node) && node.expression) {
+      const inferred = inferTypeFromExpressionSyntax(context, node.expression, sourceFile);
+      if (inferred) {
+        returns.push(inferred);
+      }
+    }
+    if (
+      ts.isFunctionDeclaration(node) ||
+      ts.isFunctionExpression(node) ||
+      ts.isArrowFunction(node) ||
+      ts.isMethodDeclaration(node)
+    ) {
+      return;
+    }
+    node.forEachChild(visit);
+  };
+  handler.body.forEachChild(visit);
+
+  if (returns.length === 0) {
+    return null;
+  }
+  if (returns.length === 1) {
+    return returns[0] ?? null;
+  }
+  return { kind: "union", members: returns };
+}
+
+function typeToNode(
+  context: AnalyzerContext,
+  type: ts.Type,
+  sourceFile: ts.SourceFile,
+  seen: Set<ts.Type>,
+): TypeNode {
+  if (seen.has(type)) {
+    return unknown("recursive_type");
+  }
+  seen.add(type);
+
+  const renderedType = context.checker.typeToString(type);
+
+  if (type.flags & ts.TypeFlags.StringLike) return { kind: "string" };
+  if (type.flags & ts.TypeFlags.NumberLike) return { kind: "float64" };
+  if (type.flags & ts.TypeFlags.BigIntLike) return { kind: "int64" };
+  if (type.flags & ts.TypeFlags.BooleanLike) return { kind: "boolean" };
+  if (type.flags & ts.TypeFlags.Null) return { kind: "null" };
+  if (type.flags & ts.TypeFlags.Any) {
+    if (renderedType === "number") return { kind: "float64" };
+    if (renderedType === "bigint") return { kind: "int64" };
+    if (renderedType === "string") return { kind: "string" };
+    if (renderedType === "boolean") return { kind: "boolean" };
+    return { kind: "any" };
+  }
+  if (type.flags & ts.TypeFlags.Unknown) return unknown("unknown_type");
+  if (type.flags & ts.TypeFlags.StringLiteral) {
+    return {
+      kind: "literal_string",
+      value: (type as ts.StringLiteralType).value,
+    };
+  }
+  if (type.flags & ts.TypeFlags.NumberLiteral) {
+    return {
+      kind: "literal_number",
+      value: Number((type as ts.NumberLiteralType).value),
+    };
+  }
+  if (type.flags & ts.TypeFlags.BooleanLiteral) {
+    return {
+      kind: "literal_boolean",
+      value: context.checker.typeToString(type) === "true",
+    };
+  }
+  if (type.isUnion()) {
+    return {
+      kind: "union",
+      members: type.types.map((member) =>
+        typeToNode(context, member, sourceFile, new Set(seen)),
+      ),
+    };
+  }
+
+  if (context.checker.isArrayType(type)) {
+    const element =
+      context.checker.getTypeArguments(type as ts.TypeReference)[0] ??
+      context.checker.getIndexTypeOfType(type, ts.IndexKind.Number);
+    return {
+      kind: "array",
+      element: typeToNode(
+        context,
+        element ?? context.checker.getAnyType(),
+        sourceFile,
+        new Set(seen),
+      ),
+    };
+  }
+
+  const typeName = renderedType;
+  if (typeName === "ArrayBuffer" || typeName === "Uint8Array") {
+    return { kind: "bytes" };
+  }
+
+  const symbol = type.getSymbol();
+  if (symbol?.getName() === "GenericId" || typeName.startsWith("Id<")) {
+    const match = typeName.match(/<"([^"]+)">/);
+    const table = match?.[1];
+    if (table) {
+      return { kind: "id", table };
+    }
+  }
+
+  const properties = context.checker.getPropertiesOfType(type);
+  if (properties.length > 0) {
+    const fields = properties
+      .filter((prop) => prop.getName() !== "_id" || true)
+      .map((prop) => {
+        const propertyDeclaration =
+          [prop.valueDeclaration, ...(prop.declarations ?? [])].find((decl): decl is ts.PropertyAssignment =>
+            Boolean(decl && ts.isPropertyAssignment(decl)),
+          );
+        const declaration =
+          propertyDeclaration ?? prop.valueDeclaration ?? prop.declarations?.[0] ?? sourceFile;
+        const syntaxType = propertyDeclaration
+          ? inferTypeFromExpressionSyntax(context, propertyDeclaration.initializer, sourceFile)
+          : null;
+        const valueType = propertyDeclaration
+          ? context.checker.getTypeAtLocation(propertyDeclaration.initializer)
+          : context.checker.getTypeOfSymbolAtLocation(prop, declaration);
+        const optional = (prop.flags & ts.SymbolFlags.Optional) !== 0;
+        const inferredType =
+          syntaxType && !matchesUnknownOrAny(syntaxType)
+            ? syntaxType
+            : unwrapOptional(
+                typeToNode(context, valueType, sourceFile, new Set(seen)),
+              );
+        return {
+          name: prop.getName(),
+          required: !optional,
+          type: inferredType,
+          doc: ts.displayPartsToString(prop.getDocumentationComment(context.checker)) || null,
+          source: declaration ? origin(sourceFile, declaration) : null,
+        } satisfies Field;
+      });
+    return { kind: "object", fields, open: false };
+  }
+
+  pushDiagnostic(context, {
+    code: "RX051",
+    severity: "note",
+    message: `TypeScript return inference fell back to an unknown contract for ${typeName}`,
+    symbol: null,
+    provenance: "inferred",
+    suggestion:
+      "Add a returns validator if you need a stronger generated response contract.",
+    primary_span: null,
+    related_spans: [],
+    snippet: null,
+  });
+  return unknown(`type_inference:${typeName}`);
+}
+
+function reconcileGeneratedApiTopology(
+  context: AnalyzerContext,
+  functions: FunctionEntry[],
+): void {
+  const generatedApiPath = path.join(context.convexRoot, "_generated", "api.d.ts");
+  if (!fs.existsSync(generatedApiPath)) {
+    return;
+  }
+
+  const sourceFile = context.program
+    .getSourceFiles()
+    .find((sf) => normalize(sf.fileName) === normalize(generatedApiPath));
+  if (!sourceFile) {
+    return;
+  }
+
+  const generatedModules = sourceFile.statements
+    .filter(ts.isImportDeclaration)
+    .map((statement) => statement.moduleSpecifier)
+    .filter(ts.isStringLiteralLike)
+    .map((specifier) => normalize(specifier.text).replace(/^\.\.\//, "").replace(/\.js$/, ""))
+    .filter((modulePath) => modulePath !== "_generated/server" && modulePath !== "_generated/api")
+    .sort();
+
+  const extractedModules = Array.from(
+    new Set(
+      functions
+        .map((fn) => fn.module_path)
+        .filter((modulePath) => modulePath !== "http"),
+    ),
+  ).sort();
+
+  for (const modulePath of extractedModules) {
+    if (!generatedModules.includes(modulePath)) {
+      pushDiagnostic(context, {
+        code: "RX060",
+        severity: "warning",
+        message: `Generated Convex API metadata is missing module ${modulePath}`,
+        symbol: modulePath,
+        provenance: "generated_ts",
+        suggestion:
+          "Run `npx convex dev` or `npx convex codegen` to refresh convex/_generated metadata.",
+        primary_span: origin(sourceFile, sourceFile),
+        related_spans: [],
+        snippet: snippet(sourceFile, sourceFile),
+      });
+    }
+  }
+
+  for (const modulePath of generatedModules) {
+    if (!extractedModules.includes(modulePath)) {
+      pushDiagnostic(context, {
+        code: "RX061",
+        severity: "note",
+        message: `Generated Convex API metadata references module ${modulePath}, but Rustex did not extract any functions from it`,
+        symbol: modulePath,
+        provenance: "generated_ts",
+        suggestion:
+          "Check for unsupported component or helper patterns in that module, or remove stale generated metadata.",
+        primary_span: origin(sourceFile, sourceFile),
+        related_spans: [],
+        snippet: snippet(sourceFile, sourceFile),
+      });
+    }
+  }
+}
+
 function origin(sourceFile: ts.SourceFile, node: ts.Node): Origin {
   const pos = sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile));
   return {
@@ -750,6 +1201,103 @@ function unknown(reason: string): TypeNode {
   return { kind: "unknown", reason, confidence: 0 };
 }
 
+function inferTypeFromExpressionSyntax(
+  context: AnalyzerContext,
+  expression: ts.Expression,
+  sourceFile: ts.SourceFile,
+): TypeNode | null {
+  const resolved = deref(context, expression) ?? expression;
+
+  if (ts.isParenthesizedExpression(resolved) || ts.isAsExpression(resolved) || ts.isSatisfiesExpression(resolved)) {
+    return inferTypeFromExpressionSyntax(context, resolved.expression, sourceFile);
+  }
+  if (ts.isStringLiteralLike(resolved)) return { kind: "string" };
+  if (ts.isNumericLiteral(resolved)) return { kind: "float64" };
+  if (
+    resolved.kind === ts.SyntaxKind.TrueKeyword ||
+    resolved.kind === ts.SyntaxKind.FalseKeyword
+  ) {
+    return { kind: "boolean" };
+  }
+  if (ts.isObjectLiteralExpression(resolved)) {
+    const fields = resolved.properties.flatMap((prop) => {
+      if (!ts.isPropertyAssignment(prop)) return [];
+      const name = propertyName(prop.name);
+      return [{
+        name,
+        required: true,
+        type: inferTypeFromExpressionSyntax(context, prop.initializer, sourceFile) ?? unknown("expression_property"),
+        doc: null,
+        source: origin(sourceFile, prop),
+      } satisfies Field];
+    });
+    return { kind: "object", fields, open: false };
+  }
+  if (ts.isCallExpression(resolved)) {
+    const callee = expressionName(resolved.expression);
+    if (callee === "Date.now") {
+      return { kind: "float64" };
+    }
+  }
+  if (ts.isArrayLiteralExpression(resolved)) {
+    const members = resolved.elements
+      .filter(ts.isExpression)
+      .map((element) => inferTypeFromExpressionSyntax(context, element, sourceFile))
+      .filter((node): node is TypeNode => node !== null);
+    const element =
+      members.length === 0
+        ? { kind: "any" as const }
+        : members.length === 1
+          ? (members[0] ?? { kind: "any" as const })
+          : { kind: "union" as const, members };
+    return { kind: "array", element };
+  }
+  if (ts.isPropertyAccessExpression(resolved) && resolved.name.text === "length") {
+    return { kind: "float64" };
+  }
+  if (ts.isIdentifier(resolved) || ts.isPropertyAccessExpression(resolved) || ts.isElementAccessExpression(resolved)) {
+    const checkerType = context.checker.getTypeAtLocation(resolved);
+    const fromChecker = typeToNode(context, checkerType, sourceFile, new Set());
+    if (!matchesUnknownOrAny(fromChecker)) {
+      return fromChecker;
+    }
+  }
+  if (ts.isAwaitExpression(resolved)) {
+    return inferTypeFromExpressionSyntax(context, resolved.expression, sourceFile);
+  }
+  if (ts.isConditionalExpression(resolved)) {
+    const whenTrue = inferTypeFromExpressionSyntax(context, resolved.whenTrue, sourceFile);
+    const whenFalse = inferTypeFromExpressionSyntax(context, resolved.whenFalse, sourceFile);
+    if (whenTrue && whenFalse) {
+      return { kind: "union", members: [whenTrue, whenFalse] };
+    }
+  }
+  if (ts.isBinaryExpression(resolved)) {
+    if (
+      resolved.operatorToken.kind === ts.SyntaxKind.PlusToken ||
+      resolved.operatorToken.kind === ts.SyntaxKind.MinusToken ||
+      resolved.operatorToken.kind === ts.SyntaxKind.AsteriskToken ||
+      resolved.operatorToken.kind === ts.SyntaxKind.SlashToken
+    ) {
+      return { kind: "float64" };
+    }
+    if (
+      resolved.operatorToken.kind === ts.SyntaxKind.EqualsEqualsEqualsToken ||
+      resolved.operatorToken.kind === ts.SyntaxKind.EqualsEqualsToken ||
+      resolved.operatorToken.kind === ts.SyntaxKind.ExclamationEqualsEqualsToken ||
+      resolved.operatorToken.kind === ts.SyntaxKind.ExclamationEqualsToken
+    ) {
+      return { kind: "boolean" };
+    }
+  }
+
+  return null;
+}
+
+function matchesUnknownOrAny(node: TypeNode): boolean {
+  return node.kind === "any" || node.kind === "unknown";
+}
+
 function pascalCase(input: string): string {
   return input
     .split(/[^a-zA-Z0-9]/)
@@ -760,4 +1308,13 @@ function pascalCase(input: string): string {
 
 function pushDiagnostic(context: AnalyzerContext, diagnostic: Diagnostic): void {
   context.diagnostics.push(diagnostic);
+}
+
+function snippet(sourceFile: ts.SourceFile, node: ts.Node): string {
+  const start = sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile)).line;
+  const end = sourceFile.getLineAndCharacterOfPosition(node.getEnd()).line;
+  return sourceFile.text
+    .split(/\r?\n/)
+    .slice(start, Math.min(end + 1, start + 3))
+    .join("\n");
 }

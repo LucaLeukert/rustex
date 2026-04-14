@@ -6,5 +6,5 @@ license.workspace = true
 
 [dependencies]
 anyhow.workspace = true
+rustex-project = { path = "../rustex-project" }
 rustex-ir = { path = "../rustex-ir" }
-

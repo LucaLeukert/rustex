@@ -27,6 +27,7 @@ pub struct Diagnostic {
     pub primary_span: Option<SourceSpan>,
     #[serde(default)]
     pub related_spans: Vec<SourceSpan>,
+    pub snippet: Option<String>,
 }
 
 impl Diagnostic {
@@ -40,6 +41,7 @@ impl Diagnostic {
             suggestion: None,
             primary_span: None,
             related_spans: Vec::new(),
+            snippet: None,
         }
     }
 }
