@@ -27,7 +27,10 @@ pub fn analyze(
     let cache_key = snapshot_key(project_root, convex_root, allow_inferred_returns)?;
 
     if let Some(package) = load_cached(&cache_path, &cache_key)? {
-        debug!(cache_path = %cache_path, "using cached analyzer output");
+        debug!(
+            cache_path = %display_path(&cache_path, project_root),
+            "using cached analyzer output"
+        );
         return Ok(package);
     }
 
@@ -58,7 +61,10 @@ pub fn analyze(
     package.project.root = project_root.to_path_buf();
     package.project.convex_root = convex_root.to_path_buf();
     store_cached(&cache_path, &cache_key, &package)?;
-    debug!(cache_path = %cache_path, "stored analyzer output cache");
+    debug!(
+        cache_path = %display_path(&cache_path, project_root),
+        "stored analyzer output cache"
+    );
     Ok(package)
 }
 
@@ -183,4 +189,10 @@ fn snapshot_key(
     }
 
     Ok(format!("{:x}", hasher.finalize()))
+}
+
+fn display_path(path: &Utf8Path, project_root: &Utf8Path) -> String {
+    path.strip_prefix(project_root)
+        .map(Utf8Path::to_string)
+        .unwrap_or_else(|_| path.to_string())
 }

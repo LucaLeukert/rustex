@@ -95,7 +95,11 @@ pub fn load_config(root: &Utf8Path) -> Result<(RustexConfig, ProjectLayout)> {
     };
 
     validate_layout(&layout)?;
-    debug!(convex_root = %layout.convex_root, out_dir = %layout.out_dir, "resolved project layout");
+    debug!(
+        convex_root = %display_path(&layout.convex_root, &layout.root),
+        out_dir = %display_path(&layout.out_dir, &layout.root),
+        "resolved project layout"
+    );
 
     Ok((config, layout))
 }
@@ -106,6 +110,12 @@ fn absolutize(root: &Utf8Path, path: &Utf8Path) -> Utf8PathBuf {
     } else {
         root.join(path)
     }
+}
+
+fn display_path(path: &Utf8Path, root: &Utf8Path) -> String {
+    path.strip_prefix(root)
+        .map(Utf8Path::to_string)
+        .unwrap_or_else(|_| path.to_string())
 }
 
 fn validate_layout(layout: &ProjectLayout) -> Result<()> {

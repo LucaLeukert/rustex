@@ -1,4 +1,5 @@
 use std::{collections::BTreeMap, marker::PhantomData, pin::Pin, task};
+use std::fmt as stdfmt;
 
 use convex::{
     ConvexClient, FunctionResult, QuerySetSubscription, QuerySubscription, SubscriberId, Value,
@@ -6,7 +7,12 @@ use convex::{
 use futures_core::Stream;
 use serde::{Serialize, de::DeserializeOwned};
 use thiserror::Error;
+use time::macros::format_description;
 use tracing::{Instrument, debug, trace};
+use tracing_subscriber::fmt::format::Writer;
+use tracing_subscriber::fmt::time::{FormatTime, UtcTime};
+use tracing_subscriber::fmt::{FmtContext, FormatEvent, FormatFields};
+use tracing_subscriber::registry::LookupSpan;
 use tracing_subscriber::{EnvFilter, fmt};
 
 pub trait FunctionSpec {
@@ -223,8 +229,58 @@ pub enum RuntimeError {
 pub fn init_default_tracing(
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>> {
     fmt()
+        .event_format(FlatLogFormat::default())
         .with_env_filter(EnvFilter::from_default_env())
         .try_init()
+}
+
+#[derive(Clone, Debug)]
+struct FlatLogFormat {
+    timer: UtcTime<time::format_description::OwnedFormatItem>,
+}
+
+impl Default for FlatLogFormat {
+    fn default() -> Self {
+        Self {
+            timer: UtcTime::new(format_description!(
+                "[year]-[month]-[day]T[hour]:[minute]:[second]Z"
+            )
+            .into()),
+        }
+    }
+}
+
+impl<S, N> FormatEvent<S, N> for FlatLogFormat
+where
+    S: tracing::Subscriber + for<'lookup> LookupSpan<'lookup>,
+    N: for<'writer> FormatFields<'writer> + 'static,
+{
+    fn format_event(
+        &self,
+        ctx: &FmtContext<'_, S, N>,
+        mut writer: Writer<'_>,
+        event: &tracing::Event<'_>,
+    ) -> stdfmt::Result {
+        self.timer.format_time(&mut writer)?;
+        write_level(&mut writer, event.metadata().level())?;
+        ctx.field_format().format_fields(writer.by_ref(), event)?;
+        writeln!(writer)
+    }
+}
+
+fn write_level(writer: &mut Writer<'_>, level: &tracing::Level) -> stdfmt::Result {
+    if writer.has_ansi_escapes() {
+        let color = match *level {
+            tracing::Level::ERROR => "\x1b[31m",
+            tracing::Level::WARN => "\x1b[33m",
+            tracing::Level::INFO => "\x1b[32m",
+            tracing::Level::DEBUG => "\x1b[34m",
+            tracing::Level::TRACE => "\x1b[35m",
+        };
+        write!(writer, " {}{:>5}\x1b[0m ", color, level)
+    } else {
+        write!(writer, " {:>5} ", level)
+    }
 }
 
 #[tracing::instrument(name = "rustex_runtime.encode_args", skip_all)]

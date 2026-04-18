@@ -10,9 +10,15 @@ use rustex_project::{RustexConfig, load_config};
 use rustex_rustgen::generate as generate_rust;
 use rustex_ts_analyzer::analyze;
 use std::collections::BTreeMap;
+use std::fmt as stdfmt;
 use std::thread;
 use std::time::{Duration, SystemTime};
+use time::macros::format_description;
 use tracing::{debug, info, warn};
+use tracing_subscriber::fmt::format::Writer;
+use tracing_subscriber::fmt::time::{FormatTime, UtcTime};
+use tracing_subscriber::fmt::{FmtContext, FormatEvent, FormatFields};
+use tracing_subscriber::registry::LookupSpan;
 use tracing_subscriber::{EnvFilter, fmt};
 
 #[derive(Parser)]
@@ -47,6 +53,7 @@ enum Command {
 
 fn main() -> Result<()> {
     fmt()
+        .event_format(FlatLogFormat::default())
         .with_env_filter(
             EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")),
         )
@@ -86,12 +93,15 @@ fn canonicalize_or_current_utf8(path: &Utf8Path) -> Result<Utf8PathBuf> {
 fn run_command(root: &Utf8Path, command: Command) -> Result<()> {
     match command {
         Command::Generate => {
-            info!("starting generation for project at {}", root);
+            info!("starting generation for project at {}", display_path(root));
             let (config, layout) = load_config(root)?;
             emit_generate(&config, &layout)?;
         }
         Command::Check => {
-            info!("checking generated outputs for project at {}", root);
+            info!(
+                "checking generated outputs for project at {}",
+                display_path(root)
+            );
             let (config, layout) = load_config(root)?;
             let package = analyze_package(&layout)?;
             if package
@@ -108,7 +118,7 @@ fn run_command(root: &Utf8Path, command: Command) -> Result<()> {
             }
         }
         Command::Inspect { subject, format } => {
-            info!("inspecting {} for project at {}", subject, root);
+            info!("inspecting {} for project at {}", subject, display_path(root));
             let (_, layout) = load_config(root)?;
             let package = analyze_package(&layout)?;
             if format == "json" {
@@ -124,16 +134,16 @@ fn run_command(root: &Utf8Path, command: Command) -> Result<()> {
             }
         }
         Command::Diff => {
-            info!("diffing generated outputs for project at {}", root);
+            info!("diffing generated outputs for project at {}", display_path(root));
             let (config, layout) = load_config(root)?;
             let package = analyze_package(&layout)?;
             let current = expected_outputs(&config.emit, &layout.out_dir, &package)?;
             for changed in diff_outputs(&current)? {
-                info!("change detected in {}", changed);
+                info!("change detected in {}", display_path_str(&changed));
             }
         }
         Command::Watch { poll_ms } => {
-            info!("watching {} every {}ms", root, poll_ms);
+            info!("watching {} every {}ms", display_path(root), poll_ms);
             watch(root, poll_ms)?;
         }
         Command::Init { .. } => unreachable!("handled before project loading"),
@@ -176,7 +186,7 @@ fn emit_all(emit: &[String], out_dir: &Utf8Path, package: &rustex_ir::IrPackage)
             "rust" => {
                 let (config, _) = load_config(&package.project.root)?;
                 let files = generate_rust(package, &config)?;
-                write_rust(&files, &out_dir.join("rust"))?;
+                write_rust(&files, &out_dir.join("rust"), &package.project.root)?;
             }
             "ir" => write_ir(package, out_dir)?,
             "manifest" => write_manifest(package, out_dir)?,
@@ -189,6 +199,72 @@ fn emit_all(emit: &[String], out_dir: &Utf8Path, package: &rustex_ir::IrPackage)
         debug!("finished emitting artifact");
     }
     Ok(())
+}
+
+fn display_path(path: &Utf8Path) -> String {
+    display_path_str(path.as_str())
+}
+
+fn display_path_str(path: &str) -> String {
+    let current = match std::env::current_dir() {
+        Ok(current) => current,
+        Err(_) => return path.to_string(),
+    };
+    let path_buf = std::path::Path::new(path);
+    match path_buf.strip_prefix(&current) {
+        Ok(relative) if relative.as_os_str().is_empty() => ".".into(),
+        Ok(relative) => relative.display().to_string(),
+        Err(_) => path.to_string(),
+    }
+}
+
+#[derive(Clone, Debug)]
+struct FlatLogFormat {
+    timer: UtcTime<time::format_description::OwnedFormatItem>,
+}
+
+impl Default for FlatLogFormat {
+    fn default() -> Self {
+        Self {
+            timer: UtcTime::new(format_description!(
+                "[year]-[month]-[day]T[hour]:[minute]:[second]Z"
+            )
+            .into()),
+        }
+    }
+}
+
+impl<S, N> FormatEvent<S, N> for FlatLogFormat
+where
+    S: tracing::Subscriber + for<'lookup> LookupSpan<'lookup>,
+    N: for<'writer> FormatFields<'writer> + 'static,
+{
+    fn format_event(
+        &self,
+        ctx: &FmtContext<'_, S, N>,
+        mut writer: Writer<'_>,
+        event: &tracing::Event<'_>,
+    ) -> stdfmt::Result {
+        self.timer.format_time(&mut writer)?;
+        write_level(&mut writer, event.metadata().level())?;
+        ctx.field_format().format_fields(writer.by_ref(), event)?;
+        writeln!(writer)
+    }
+}
+
+fn write_level(writer: &mut Writer<'_>, level: &tracing::Level) -> stdfmt::Result {
+    if writer.has_ansi_escapes() {
+        let color = match *level {
+            tracing::Level::ERROR => "\x1b[31m",
+            tracing::Level::WARN => "\x1b[33m",
+            tracing::Level::INFO => "\x1b[32m",
+            tracing::Level::DEBUG => "\x1b[34m",
+            tracing::Level::TRACE => "\x1b[35m",
+        };
+        write!(writer, " {}{:>5}\x1b[0m ", color, level)
+    } else {
+        write!(writer, " {:>5} ", level)
+    }
 }
 
 fn expected_outputs(

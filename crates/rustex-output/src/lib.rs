@@ -11,7 +11,10 @@ pub fn write_ir(package: &IrPackage, out_dir: &Utf8Path) -> Result<()> {
         out_dir.join("rustex.ir.json"),
         serde_json::to_string_pretty(package)?,
     )?;
-    info!("IR document written to {}", out_dir);
+    info!(
+        "IR document written to {}",
+        display_path(out_dir, &package.project.root)
+    );
     Ok(())
 }
 
@@ -21,7 +24,10 @@ pub fn write_manifest(package: &IrPackage, out_dir: &Utf8Path) -> Result<()> {
         out_dir.join("rustex.manifest.json"),
         serde_json::to_string_pretty(&package.manifest_meta)?,
     )?;
-    info!("Manifest document written to {}", out_dir);
+    info!(
+        "Manifest document written to {}",
+        display_path(out_dir, &package.project.root)
+    );
     Ok(())
 }
 
@@ -31,7 +37,10 @@ pub fn write_diagnostics(package: &IrPackage, out_dir: &Utf8Path) -> Result<()> 
         out_dir.join("rustex.diagnostics.json"),
         serde_json::to_string_pretty(&package.diagnostics)?,
     )?;
-    info!("Diagnostics document written to {}", out_dir);
+    info!(
+        "Diagnostics document written to {}",
+        display_path(out_dir, &package.project.root)
+    );
     Ok(())
 }
 
@@ -41,7 +50,10 @@ pub fn write_json_schema(package: &IrPackage, out_dir: &Utf8Path) -> Result<()> 
         out_dir.join("rustex.schema.json"),
         serde_json::to_string_pretty(&json_schema_document(package))?,
     )?;
-    info!("JSON schema document written to {}", out_dir);
+    info!(
+        "JSON schema document written to {}",
+        display_path(out_dir, &package.project.root)
+    );
     Ok(())
 }
 
@@ -51,7 +63,10 @@ pub fn write_openapi(package: &IrPackage, out_dir: &Utf8Path) -> Result<()> {
         out_dir.join("rustex.openapi.json"),
         serde_json::to_string_pretty(&openapi_document(package))?,
     )?;
-    info!("OpenAPI document written to {}", out_dir);
+    info!(
+        "OpenAPI document written to {}",
+        display_path(out_dir, &package.project.root)
+    );
     Ok(())
 }
 
@@ -61,11 +76,14 @@ pub fn write_source_map(package: &IrPackage, out_dir: &Utf8Path) -> Result<()> {
         out_dir.join("rustex.source_map.json"),
         serde_json::to_string_pretty(&source_map_document(package))?,
     )?;
-    info!("Source map document written to {}", out_dir);
+    info!(
+        "Source map document written to {}",
+        display_path(out_dir, &package.project.root)
+    );
     Ok(())
 }
 
-pub fn write_rust(files: &[GeneratedFile], out_dir: &Utf8Path) -> Result<()> {
+pub fn write_rust(files: &[GeneratedFile], out_dir: &Utf8Path, project_root: &Utf8Path) -> Result<()> {
     std::fs::create_dir_all(out_dir)?;
     for file in files {
         let path = out_dir.join(&file.path);
@@ -74,8 +92,14 @@ pub fn write_rust(files: &[GeneratedFile], out_dir: &Utf8Path) -> Result<()> {
         }
         std::fs::write(path, &file.contents)?;
     }
-    info!("Rust files written to {}", out_dir);
+    info!("Rust files written to {}", display_path(out_dir, project_root));
     Ok(())
+}
+
+fn display_path(path: &Utf8Path, project_root: &Utf8Path) -> String {
+    path.strip_prefix(project_root)
+        .map(Utf8Path::to_string)
+        .unwrap_or_else(|_| path.to_string())
 }
 
 pub fn source_map_document(package: &IrPackage) -> Value {
