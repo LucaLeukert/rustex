@@ -1,46 +1,41 @@
-# example
+# Rustex Example
 
-To install dependencies:
-
-```bash
-bun install
-```
-
-To run:
-
-```bash
-bun run index.ts
-```
-
-This project was created using `bun init` in bun v1.3.5. [Bun](https://bun.com) is a fast all-in-one JavaScript runtime.
-
-## Layout
-
-The example keeps one shared Convex app and two typed clients:
+This example contains one Convex app and two generated typed clients:
 
 - `convex/`: shared Convex schema and functions
-- `rust/`: Rust CLI example
-- `swift/`: Swift CLI example
+- `rust/`: Rust CLI using generated Rust bindings
+- `swift/`: Swift CLI using generated Swift bindings
+- `convex/_rustex/`: generated Rustex output
 
-Regenerate bindings after changing the Convex schema or functions:
+Both CLIs read the Convex deployment URL from `example/.env.local`:
 
-```bash
-cargo run -p rustex-cli -- --project . generate
+```sh
+CONVEX_URL=https://your-deployment.convex.cloud
 ```
 
-This writes Rust and Swift bindings under `convex/_rustex/`.
+## Regenerate Bindings
+
+Run from the repository root:
+
+```sh
+cargo run -p rustex-cli -- --project example generate
+```
+
+The example config enables Rust, Swift, IR, and diagnostics output. Generated
+bindings are written under `example/convex/_rustex/`.
 
 ## Rust CLI
 
-The typed Rust CLI is rooted at [example/rust/Cargo.toml](/Users/lucaleukert/src/rustex/example/rust/Cargo.toml) and talks to the shared Convex deployment through:
+The Rust CLI is rooted at [example/rust/Cargo.toml](/Users/lucaleukert/src/rustex/example/rust/Cargo.toml).
+It uses:
 
-- `rustex_runtime::RustexClient` for typed queries, mutations, and subscriptions
-- `convex::ConvexClient` for raw subscriptions, decoded back into generated Rust types
-- generated `query!`, `mutation!`, and `subscribe!` macros for JS-like call sites
+- `rustex_runtime::RustexClient`
+- generated Rust models and API specs
+- generated `query!`, `mutation!`, and `subscribe!` macros
 
-Then run the CLI from the repo root:
+Run from the repository root:
 
-```bash
+```sh
 cargo run --manifest-path example/rust/Cargo.toml -- list
 cargo run --manifest-path example/rust/Cargo.toml -- add --author alice --body "hello from rust"
 cargo run --manifest-path example/rust/Cargo.toml -- watch --updates 1
@@ -48,14 +43,25 @@ cargo run --manifest-path example/rust/Cargo.toml -- watch --updates 1
 
 ## Swift CLI
 
-The typed Swift CLI is rooted at [example/swift/Package.swift](/Users/lucaleukert/src/rustex/example/swift/Package.swift) and uses the generated Swift package in `convex/_rustex/swift`.
+The Swift CLI is rooted at [example/swift/Package.swift](/Users/lucaleukert/src/rustex/example/swift/Package.swift).
+It depends on the generated Swift package in `example/convex/_rustex/swift`
+through the local `example/swift/RustexGenerated` symlink.
 
-Run it from the repo root:
+Run from the repository root:
 
-```bash
+```sh
 swift run --package-path example/swift RustexSwiftExample list
 swift run --package-path example/swift RustexSwiftExample add --author alice --body "hello from swift"
 swift run --package-path example/swift RustexSwiftExample watch --updates 1
 ```
 
-`example/.env.local` already contains `CONVEX_URL`, and both CLIs load it automatically.
+The Swift example uses generated call builders:
+
+```swift
+let id = try await client.mutation(
+  API.Messages.add(author: author, body: body)
+)
+
+let messages = try await client.query(API.Messages.collect())
+```
+
