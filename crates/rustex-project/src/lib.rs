@@ -22,6 +22,8 @@ pub struct RustexConfig {
     pub custom_derives: Vec<String>,
     #[serde(default)]
     pub custom_attributes: Vec<String>,
+    #[serde(default)]
+    pub swift: SwiftTargetConfig,
 }
 
 fn default_emit() -> Vec<String> {
@@ -49,8 +51,132 @@ impl Default for RustexConfig {
             id_style: default_id_style(),
             custom_derives: Vec::new(),
             custom_attributes: Vec::new(),
+            swift: SwiftTargetConfig::default(),
         }
     }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct SwiftTargetConfig {
+    #[serde(default = "default_swift_package_name")]
+    pub package_name: String,
+    #[serde(default = "default_swift_module_name")]
+    pub module_name: String,
+    #[serde(default = "default_swift_product_name")]
+    pub product_name: String,
+    #[serde(default = "default_swift_runtime_module_name")]
+    pub runtime_module_name: String,
+    #[serde(default = "default_swift_client_facade_name")]
+    pub client_facade_name: String,
+    #[serde(default = "default_true")]
+    pub generate_package: bool,
+    #[serde(default = "default_true")]
+    pub bundle_runtime: bool,
+    #[serde(default)]
+    pub access_level: SwiftAccessLevel,
+    #[serde(default = "default_swift_tools_version")]
+    pub tools_version: String,
+    #[serde(default)]
+    pub unknown_type_strategy: SwiftUnknownTypeStrategy,
+    #[serde(default = "default_true")]
+    pub emit_doc_comments: bool,
+    #[serde(default = "default_swift_convex_dependency_url")]
+    pub convex_dependency_url: String,
+    #[serde(default)]
+    pub convex_dependency_requirement: SwiftPackageRequirement,
+}
+
+impl Default for SwiftTargetConfig {
+    fn default() -> Self {
+        Self {
+            package_name: default_swift_package_name(),
+            module_name: default_swift_module_name(),
+            product_name: default_swift_product_name(),
+            runtime_module_name: default_swift_runtime_module_name(),
+            client_facade_name: default_swift_client_facade_name(),
+            generate_package: true,
+            bundle_runtime: true,
+            access_level: SwiftAccessLevel::Public,
+            tools_version: default_swift_tools_version(),
+            unknown_type_strategy: SwiftUnknownTypeStrategy::AnyCodable,
+            emit_doc_comments: true,
+            convex_dependency_url: default_swift_convex_dependency_url(),
+            convex_dependency_requirement: SwiftPackageRequirement::default(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum SwiftAccessLevel {
+    #[default]
+    Public,
+    Internal,
+}
+
+impl SwiftAccessLevel {
+    pub fn as_swift(&self) -> &'static str {
+        match self {
+            Self::Public => "public",
+            Self::Internal => "internal",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum SwiftUnknownTypeStrategy {
+    #[default]
+    AnyCodable,
+    JsonValue,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum SwiftPackageRequirement {
+    From { version: String },
+    Branch { branch: String },
+    Exact { version: String },
+}
+
+impl Default for SwiftPackageRequirement {
+    fn default() -> Self {
+        Self::From {
+            version: "0.8.1".into(),
+        }
+    }
+}
+
+fn default_true() -> bool {
+    true
+}
+
+fn default_swift_package_name() -> String {
+    "RustexGenerated".into()
+}
+
+fn default_swift_module_name() -> String {
+    "RustexGenerated".into()
+}
+
+fn default_swift_product_name() -> String {
+    "RustexGenerated".into()
+}
+
+fn default_swift_runtime_module_name() -> String {
+    "RustexRuntime".into()
+}
+
+fn default_swift_client_facade_name() -> String {
+    "RustexClient".into()
+}
+
+fn default_swift_tools_version() -> String {
+    "5.10".into()
+}
+
+fn default_swift_convex_dependency_url() -> String {
+    "https://github.com/get-convex/convex-swift".into()
 }
 
 #[derive(Debug, Clone)]

@@ -8,6 +8,7 @@ members = [
   "crates/rustex-diagnostics",
   "crates/rustex-runtime",
   "crates/rustex-rustgen",
+  "crates/rustex-swiftgen",
   "crates/rustex-output",
   "crates/rustex-testkit",
   "example",
@@ -19,6 +20,12 @@ edition = "2024"
 license = "MIT"
 version = "0.1.0"
 authors = ["Rustex Contributors"]
+rust-version = "1.85"
+repository = "https://github.com/lucaLeukert/rustex"
+homepage = "https://github.com/lucaLeukert/rustex"
+documentation = "https://docs.rs/rustex-runtime"
+keywords = ["convex", "codegen", "typescript", "rust"]
+categories = ["development-tools", "command-line-utilities"]
 
 [workspace.dependencies]
 anyhow = "1.0.100"

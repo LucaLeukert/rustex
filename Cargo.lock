@@ -1126,7 +1126,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "rustex"
+name = "rustex-cli"
 version = "0.1.0"
 dependencies = [
  "anyhow",
@@ -1138,6 +1138,7 @@ dependencies = [
  "rustex-output",
  "rustex-project",
  "rustex-rustgen",
+ "rustex-swiftgen",
  "rustex-ts-analyzer",
  "serde_json",
  "time",
@@ -1208,6 +1209,7 @@ dependencies = [
  "camino",
  "rustex-ir",
  "rustex-rustgen",
+ "rustex-swiftgen",
  "serde_json",
  "tracing",
 ]
@@ -1244,6 +1246,16 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "log",
+ "rustex-ir",
+ "rustex-project",
+ "tracing",
+]
+
+[[package]]
+name = "rustex-swiftgen"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
  "rustex-ir",
  "rustex-project",
  "tracing",

@@ -3,10 +3,13 @@ name = "rustex-ir"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "Language-neutral intermediate representation for Rustex."
 
 [dependencies]
 camino.workspace = true
-rustex-diagnostics = { path = "../rustex-diagnostics" }
+rustex-diagnostics = { path = "../rustex-diagnostics", version = "0.1.0" }
 serde.workspace = true
 serde_json.workspace = true
-

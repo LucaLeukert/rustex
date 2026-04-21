@@ -47,15 +47,39 @@ pub fn generate(package: &IrPackage, config: &RustexConfig) -> Result<Vec<Genera
 }
 
 fn cargo_toml(package: &IrPackage) -> String {
-    let runtime_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../rustex-runtime")
-        .canonicalize()
-        .expect("runtime crate path");
+    let runtime_dependency = runtime_dependency();
     format!(
-        "[package]\nname = \"{}-generated\"\nversion = \"0.1.0\"\nedition = \"2024\"\n\n[lib]\npath = \"lib.rs\"\n\n[dependencies]\nserde = {{ version = \"1\", features = [\"derive\"] }}\nserde_json = \"1\"\nrustex-runtime = {{ path = \"{}\" }}\ntracing = \"0.1\"\ntracing-subscriber = {{ version = \"0.3\", features = [\"env-filter\", \"fmt\"] }}\n",
+        "[package]\nname = \"{}-generated\"\nversion = \"0.1.0\"\nedition = \"2024\"\n\n[lib]\npath = \"lib.rs\"\n\n[dependencies]\nserde = {{ version = \"1\", features = [\"derive\"] }}\nserde_json = \"1\"\n{runtime_dependency}\ntracing = \"0.1\"\ntracing-subscriber = {{ version = \"0.3\", features = [\"env-filter\", \"fmt\"] }}\n",
         package.project.name,
-        runtime_path.display()
     )
+}
+
+fn runtime_dependency() -> String {
+    if let Ok(path) = std::env::var("RUSTEX_GENERATED_RUNTIME_PATH") {
+        return format!(
+            "rustex-runtime = {{ path = \"{}\", version = \"{}\" }}",
+            escape_toml_string(&path),
+            env!("CARGO_PKG_VERSION")
+        );
+    }
+
+    let local_runtime_path =
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../rustex-runtime");
+    if local_runtime_path.join("Cargo.toml").is_file() {
+        if let Ok(path) = local_runtime_path.canonicalize() {
+            return format!(
+                "rustex-runtime = {{ path = \"{}\", version = \"{}\" }}",
+                escape_toml_string(&path.display().to_string()),
+                env!("CARGO_PKG_VERSION")
+            );
+        }
+    }
+
+    format!("rustex-runtime = \"{}\"", env!("CARGO_PKG_VERSION"))
+}
+
+fn escape_toml_string(value: &str) -> String {
+    value.replace('\\', "\\\\").replace('"', "\\\"")
 }
 
 fn lib_rs() -> String {

@@ -4,10 +4,11 @@ use clap::{Parser, Subcommand};
 use rustex_convex::finalize_ir;
 use rustex_output::{
     json_schema_document, openapi_document, source_map_document, write_diagnostics, write_ir,
-    write_json_schema, write_manifest, write_openapi, write_rust, write_source_map,
+    write_json_schema, write_manifest, write_openapi, write_rust, write_source_map, write_swift,
 };
 use rustex_project::{RustexConfig, load_config};
 use rustex_rustgen::generate as generate_rust;
+use rustex_swiftgen::generate as generate_swift;
 use rustex_ts_analyzer::analyze;
 use std::collections::BTreeMap;
 use std::fmt as stdfmt;
@@ -118,7 +119,11 @@ fn run_command(root: &Utf8Path, command: Command) -> Result<()> {
             }
         }
         Command::Inspect { subject, format } => {
-            info!("inspecting {} for project at {}", subject, display_path(root));
+            info!(
+                "inspecting {} for project at {}",
+                subject,
+                display_path(root)
+            );
             let (_, layout) = load_config(root)?;
             let package = analyze_package(&layout)?;
             if format == "json" {
@@ -134,7 +139,10 @@ fn run_command(root: &Utf8Path, command: Command) -> Result<()> {
             }
         }
         Command::Diff => {
-            info!("diffing generated outputs for project at {}", display_path(root));
+            info!(
+                "diffing generated outputs for project at {}",
+                display_path(root)
+            );
             let (config, layout) = load_config(root)?;
             let package = analyze_package(&layout)?;
             let current = expected_outputs(&config.emit, &layout.out_dir, &package)?;
@@ -188,6 +196,11 @@ fn emit_all(emit: &[String], out_dir: &Utf8Path, package: &rustex_ir::IrPackage)
                 let files = generate_rust(package, &config)?;
                 write_rust(&files, &out_dir.join("rust"), &package.project.root)?;
             }
+            "swift" => {
+                let (config, _) = load_config(&package.project.root)?;
+                let files = generate_swift(package, &config)?;
+                write_swift(&files, &out_dir.join("swift"), &package.project.root)?;
+            }
             "ir" => write_ir(package, out_dir)?,
             "manifest" => write_manifest(package, out_dir)?,
             "diagnostics" => write_diagnostics(package, out_dir)?,
@@ -226,10 +239,9 @@ struct FlatLogFormat {
 impl Default for FlatLogFormat {
     fn default() -> Self {
         Self {
-            timer: UtcTime::new(format_description!(
-                "[year]-[month]-[day]T[hour]:[minute]:[second]Z"
-            )
-            .into()),
+            timer: UtcTime::new(
+                format_description!("[year]-[month]-[day]T[hour]:[minute]:[second]Z").into(),
+            ),
         }
     }
 }
@@ -279,30 +291,47 @@ fn expected_outputs(
             outputs.insert(out_dir.join("rust").join(&file.path), file.contents);
         }
     }
-    outputs.insert(
-        out_dir.join("rustex.ir.json"),
-        serde_json::to_string_pretty(package)?,
-    );
-    outputs.insert(
-        out_dir.join("rustex.manifest.json"),
-        serde_json::to_string_pretty(&package.manifest_meta)?,
-    );
-    outputs.insert(
-        out_dir.join("rustex.diagnostics.json"),
-        serde_json::to_string_pretty(&package.diagnostics)?,
-    );
-    outputs.insert(
-        out_dir.join("rustex.source_map.json"),
-        serde_json::to_string_pretty(&source_map_document(package))?,
-    );
-    outputs.insert(
-        out_dir.join("rustex.schema.json"),
-        serde_json::to_string_pretty(&json_schema_document(package))?,
-    );
-    outputs.insert(
-        out_dir.join("rustex.openapi.json"),
-        serde_json::to_string_pretty(&openapi_document(package))?,
-    );
+    if emit.iter().any(|e| e == "swift") {
+        for file in generate_swift(package, &config)? {
+            outputs.insert(out_dir.join("swift").join(&file.path), file.contents);
+        }
+    }
+    if emit.iter().any(|e| e == "ir") {
+        outputs.insert(
+            out_dir.join("rustex.ir.json"),
+            serde_json::to_string_pretty(package)?,
+        );
+    }
+    if emit.iter().any(|e| e == "manifest") {
+        outputs.insert(
+            out_dir.join("rustex.manifest.json"),
+            serde_json::to_string_pretty(&package.manifest_meta)?,
+        );
+    }
+    if emit.iter().any(|e| e == "diagnostics") {
+        outputs.insert(
+            out_dir.join("rustex.diagnostics.json"),
+            serde_json::to_string_pretty(&package.diagnostics)?,
+        );
+    }
+    if emit.iter().any(|e| e == "source_map") {
+        outputs.insert(
+            out_dir.join("rustex.source_map.json"),
+            serde_json::to_string_pretty(&source_map_document(package))?,
+        );
+    }
+    if emit.iter().any(|e| e == "schema") {
+        outputs.insert(
+            out_dir.join("rustex.schema.json"),
+            serde_json::to_string_pretty(&json_schema_document(package))?,
+        );
+    }
+    if emit.iter().any(|e| e == "openapi") {
+        outputs.insert(
+            out_dir.join("rustex.openapi.json"),
+            serde_json::to_string_pretty(&openapi_document(package))?,
+        );
+    }
     Ok(outputs)
 }
 

@@ -3,8 +3,11 @@ name = "rustex-diagnostics"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "Structured diagnostics for the Rustex code generation pipeline."
 
 [dependencies]
 camino.workspace = true
 serde.workspace = true
-

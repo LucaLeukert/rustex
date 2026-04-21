@@ -1,5 +1,5 @@
-use std::{collections::BTreeMap, marker::PhantomData, pin::Pin, task};
 use std::fmt as stdfmt;
+use std::{collections::BTreeMap, marker::PhantomData, pin::Pin, task};
 
 use convex::{
     ConvexClient, FunctionResult, QuerySetSubscription, QuerySubscription, SubscriberId, Value,
@@ -226,8 +226,7 @@ pub enum RuntimeError {
     Serde(#[from] serde_json::Error),
 }
 
-pub fn init_default_tracing(
-) -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>> {
+pub fn init_default_tracing() -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>> {
     fmt()
         .event_format(FlatLogFormat::default())
         .with_env_filter(EnvFilter::from_default_env())
@@ -242,10 +241,9 @@ struct FlatLogFormat {
 impl Default for FlatLogFormat {
     fn default() -> Self {
         Self {
-            timer: UtcTime::new(format_description!(
-                "[year]-[month]-[day]T[hour]:[minute]:[second]Z"
-            )
-            .into()),
+            timer: UtcTime::new(
+                format_description!("[year]-[month]-[day]T[hour]:[minute]:[second]Z").into(),
+            ),
         }
     }
 }

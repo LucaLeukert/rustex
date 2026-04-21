@@ -1,20 +1,25 @@
 [package]
-name = "rustex"
+name = "rustex-cli"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "Convex to Rust code generation CLI for type-safe Rust clients."
 
 [dependencies]
 anyhow.workspace = true
 camino.workspace = true
 clap.workspace = true
-rustex-convex = { path = "../rustex-convex" }
-rustex-diagnostics = { path = "../rustex-diagnostics" }
-rustex-ir = { path = "../rustex-ir" }
-rustex-output = { path = "../rustex-output" }
-rustex-project = { path = "../rustex-project" }
-rustex-rustgen = { path = "../rustex-rustgen" }
-rustex-ts-analyzer = { path = "../rustex-ts-analyzer" }
+rustex-convex = { path = "../rustex-convex", version = "0.1.0" }
+rustex-diagnostics = { path = "../rustex-diagnostics", version = "0.1.0" }
+rustex-ir = { path = "../rustex-ir", version = "0.1.0" }
+rustex-output = { path = "../rustex-output", version = "0.1.0" }
+rustex-project = { path = "../rustex-project", version = "0.1.0" }
+rustex-rustgen = { path = "../rustex-rustgen", version = "0.1.0" }
+rustex-swiftgen = { path = "../rustex-swiftgen", version = "0.1.0" }
+rustex-ts-analyzer = { path = "../rustex-ts-analyzer", version = "0.1.0" }
 serde_json.workspace = true
 toml.workspace = true
 tracing.workspace = true

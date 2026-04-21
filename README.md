@@ -131,6 +131,7 @@ Policy:
 - `crates/rustex-diagnostics`: structured diagnostics model
 - `crates/rustex-runtime`: typed runtime wrapper over the official Rust Convex client
 - `crates/rustex-rustgen`: Rust code generation backend
+- `crates/rustex-swiftgen`: Swift code generation backend with bundled Swift runtime sources
 - `crates/rustex-output`: deterministic artifact writing
 - `crates/rustex-testkit`: shared test utilities
 - `packages/ts-analyzer`: Effect-based TypeScript analyzer bundled to a single JavaScript file for Node
@@ -143,7 +144,7 @@ Policy:
 4. Parse schema validators and exported Convex function registrations.
 5. Normalize extracted shapes into IR.
 6. Finalize and hash the IR deterministically.
-7. Emit Rust code, including typed function specs consumed by the runtime crate.
+7. Emit target code, including typed function specs consumed by the Rust or Swift runtime.
 8. Emit IR JSON, manifest JSON, and diagnostics JSON.
 
 ### IR model
@@ -200,7 +201,94 @@ Current generated API policy:
 - explicit runtime errors for transport issues, function errors, invalid arg
   encoding, and deserialization failures
 
+### Swift codegen
+
+The Swift backend emits a Swift Package under `<out_dir>/swift` when
+`emit = ["swift"]` is configured. The package contains:
+
+- a `RustexRuntime` target that wraps the official `ConvexMobile.ConvexClient`
+- a generated app bindings target, defaulting to `RustexGenerated`
+- typed ids, document models, function args, and function responses
+- typed query subscription, one-shot query, mutation, and action helpers
+
+The Swift runtime mirrors the Rust runtime shape where Convex Swift exposes the
+same capability: `RustexFunctionSpec`, `RustexQuerySpec`,
+`RustexMutationSpec`, `RustexActionSpec`, `RustexClient`, typed operation
+methods, structured runtime errors, and raw Convex client access. Convex Swift
+does not expose Rust's `watch_all`; the generated runtime exposes
+`watchWebSocketState()` and keeps `raw` public for direct Convex Swift features.
+
+Swift generation is enabled from `rustex.toml`:
+
+```toml
+emit = ["swift", "manifest", "ir"]
+
+[swift]
+package_name = "RustexGenerated"
+module_name = "RustexGenerated"
+product_name = "RustexGenerated"
+runtime_module_name = "RustexRuntime"
+client_facade_name = "RustexClient"
+generate_package = true
+bundle_runtime = true
+access_level = "public"
+tools_version = "5.10"
+unknown_type_strategy = "any_codable"
+emit_doc_comments = true
+convex_dependency_url = "https://github.com/get-convex/convex-swift"
+
+[swift.convex_dependency_requirement]
+kind = "from"
+version = "0.8.1"
+```
+
+Generated Swift uses Convex Swift's documented numeric wrappers such as
+`@ConvexInt`, `@OptionalConvexInt`, `@ConvexFloat`, and
+`@OptionalConvexFloat` for decoded values.
+
 ## CLI
+
+### Install
+
+For consumers, the primary install path is the Rust CLI package:
+
+```sh
+cargo install rustex-cli
+rustex --help
+```
+
+The Cargo package is named `rustex-cli` because `rustex` is already taken on
+crates.io by an unrelated crate. The installed executable is still named
+`rustex`.
+
+Generated Rust code depends on the published runtime crate:
+
+```toml
+[dependencies]
+rustex-runtime = "0.1.0"
+```
+
+The generated crate's `Cargo.toml` includes this runtime dependency by default
+when the CLI is installed from crates.io. Local workspace builds use the adjacent
+`crates/rustex-runtime` path automatically so repository tests and examples can
+compile without publishing first.
+
+Publishing order for a crates.io release:
+
+1. `rustex-diagnostics`
+2. `rustex-ir`
+3. `rustex-project`
+4. `rustex-convex`
+5. `rustex-rustgen`
+6. `rustex-swiftgen`
+7. `rustex-output`
+8. `rustex-ts-analyzer`
+9. `rustex-runtime`
+10. `rustex-cli`
+
+`rustex-ts-analyzer` ships a vendored analyzer bundle for published Cargo
+installs. Development builds inside this monorepo still rebuild the analyzer
+from `packages/ts-analyzer` with Node, pnpm, and esbuild.
 
 Primary commands:
 

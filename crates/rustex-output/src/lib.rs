@@ -1,7 +1,8 @@
 use anyhow::Result;
 use camino::Utf8Path;
 use rustex_ir::{ConstraintKind, IrPackage, NamedType, Origin, TypeNode};
-use rustex_rustgen::GeneratedFile;
+use rustex_rustgen::GeneratedFile as RustGeneratedFile;
+use rustex_swiftgen::GeneratedFile as SwiftGeneratedFile;
 use serde_json::{Map, Value, json};
 use tracing::info;
 
@@ -83,16 +84,54 @@ pub fn write_source_map(package: &IrPackage, out_dir: &Utf8Path) -> Result<()> {
     Ok(())
 }
 
-pub fn write_rust(files: &[GeneratedFile], out_dir: &Utf8Path, project_root: &Utf8Path) -> Result<()> {
+pub fn write_rust(
+    files: &[RustGeneratedFile],
+    out_dir: &Utf8Path,
+    project_root: &Utf8Path,
+) -> Result<()> {
+    write_generated_files(
+        files
+            .iter()
+            .map(|file| (file.path.as_str(), file.contents.as_str())),
+        out_dir,
+        project_root,
+        "Rust",
+    )
+}
+
+pub fn write_swift(
+    files: &[SwiftGeneratedFile],
+    out_dir: &Utf8Path,
+    project_root: &Utf8Path,
+) -> Result<()> {
+    write_generated_files(
+        files
+            .iter()
+            .map(|file| (file.path.as_str(), file.contents.as_str())),
+        out_dir,
+        project_root,
+        "Swift",
+    )
+}
+
+fn write_generated_files<'a>(
+    files: impl Iterator<Item = (&'a str, &'a str)>,
+    out_dir: &Utf8Path,
+    project_root: &Utf8Path,
+    label: &str,
+) -> Result<()> {
     std::fs::create_dir_all(out_dir)?;
-    for file in files {
-        let path = out_dir.join(&file.path);
+    for (file_path, contents) in files {
+        let path = out_dir.join(file_path);
         if let Some(parent) = path.parent() {
             std::fs::create_dir_all(parent)?;
         }
-        std::fs::write(path, &file.contents)?;
+        std::fs::write(path, contents)?;
     }
-    info!("Rust files written to {}", display_path(out_dir, project_root));
+    info!(
+        "{label} files written to {}",
+        display_path(out_dir, project_root)
+    );
     Ok(())
 }
 

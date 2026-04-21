@@ -3,10 +3,14 @@ name = "rustex-rustgen"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "Rust code generation backend for Rustex."
 
 [dependencies]
 anyhow.workspace = true
-rustex-project = { path = "../rustex-project" }
-rustex-ir = { path = "../rustex-ir" }
+rustex-project = { path = "../rustex-project", version = "0.1.0" }
+rustex-ir = { path = "../rustex-ir", version = "0.1.0" }
 tracing.workspace = true
 log = "0.4.29"

@@ -1,7 +1,7 @@
 #![allow(unused_imports)]
+use crate::ids::*;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
-use crate::ids::*;
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct MessagesDoc {
@@ -10,4 +10,3 @@ pub struct MessagesDoc {
     pub author: String,
     pub body: String,
 }
-

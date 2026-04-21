@@ -12,3 +12,21 @@ naming_strategy = "safe"
 id_style = "newtype_per_table"
 custom_derives = []
 custom_attributes = []
+
+[swift]
+package_name = "RustexGenerated"
+module_name = "RustexGenerated"
+product_name = "RustexGenerated"
+runtime_module_name = "RustexRuntime"
+client_facade_name = "RustexClient"
+generate_package = true
+bundle_runtime = true
+access_level = "public"
+tools_version = "5.10"
+unknown_type_strategy = "any_codable"
+emit_doc_comments = true
+convex_dependency_url = "https://github.com/get-convex/convex-swift"
+
+[swift.convex_dependency_requirement]
+kind = "from"
+version = "0.8.1"

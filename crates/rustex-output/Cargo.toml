@@ -3,11 +3,16 @@ name = "rustex-output"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "Deterministic artifact writers for Rustex outputs."
 
 [dependencies]
 anyhow.workspace = true
 camino.workspace = true
-rustex-ir = { path = "../rustex-ir" }
-rustex-rustgen = { path = "../rustex-rustgen" }
+rustex-ir = { path = "../rustex-ir", version = "0.1.0" }
+rustex-rustgen = { path = "../rustex-rustgen", version = "0.1.0" }
+rustex-swiftgen = { path = "../rustex-swiftgen", version = "0.1.0" }
 serde_json.workspace = true
 tracing.workspace = true

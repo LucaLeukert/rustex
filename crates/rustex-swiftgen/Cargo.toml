@@ -1,0 +1,15 @@
+[package]
+name = "rustex-swiftgen"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "Convex to Swift code generation backend for Rustex."
+
+[dependencies]
+anyhow.workspace = true
+rustex-ir = { path = "../rustex-ir", version = "0.1.0" }
+rustex-project = { path = "../rustex-project", version = "0.1.0" }
+tracing.workspace = true

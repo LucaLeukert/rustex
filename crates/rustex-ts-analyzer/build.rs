@@ -16,8 +16,13 @@ fn build() -> Result<(), String> {
     let manifest_dir =
         PathBuf::from(env::var("CARGO_MANIFEST_DIR").map_err(|err| err.to_string())?);
     let package_dir = manifest_dir.join("../../packages/ts-analyzer");
+    let vendored_entrypoint = manifest_dir.join("vendor/analyze.cjs");
     let out_dir = PathBuf::from(env::var("OUT_DIR").map_err(|err| err.to_string())?);
     let analyzer_out_dir = out_dir.join("ts-analyzer");
+
+    if !package_dir.join("src/analyze.ts").is_file() {
+        return use_vendored_bundle(&vendored_entrypoint);
+    }
 
     println!(
         "cargo:rerun-if-changed={}",
@@ -35,6 +40,7 @@ fn build() -> Result<(), String> {
         "cargo:rerun-if-changed={}",
         package_dir.join("tsconfig.build.json").display()
     );
+    println!("cargo:rerun-if-changed={}", vendored_entrypoint.display());
 
     let _node = find_command("RUSTEX_NODE_BIN", &["node", "nodejs"])?;
     ensure_node_modules(&package_dir)?;
@@ -75,6 +81,25 @@ fn build() -> Result<(), String> {
         fs::read(&entrypoint).map_err(|err| format!("failed to read bundled analyzer: {err}"))?;
     let bundle_hash = sha256_hex(&bundle);
 
+    println!(
+        "cargo:rustc-env=RUSTEX_TS_ANALYZER_BUNDLE={}",
+        entrypoint.display()
+    );
+    println!("cargo:rustc-env=RUSTEX_TS_ANALYZER_BUNDLE_SHA256={bundle_hash}");
+    Ok(())
+}
+
+fn use_vendored_bundle(entrypoint: &Path) -> Result<(), String> {
+    println!("cargo:rerun-if-changed={}", entrypoint.display());
+    if !entrypoint.is_file() {
+        return Err(format!(
+            "vendored TypeScript analyzer bundle is missing at {}",
+            entrypoint.display()
+        ));
+    }
+    let bundle =
+        fs::read(entrypoint).map_err(|err| format!("failed to read vendored analyzer: {err}"))?;
+    let bundle_hash = sha256_hex(&bundle);
     println!(
         "cargo:rustc-env=RUSTEX_TS_ANALYZER_BUNDLE={}",
         entrypoint.display()

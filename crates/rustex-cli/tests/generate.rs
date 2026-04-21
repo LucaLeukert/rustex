@@ -57,6 +57,65 @@ fn generated_files_match_golden_output() -> Result<()> {
 }
 
 #[test]
+fn swift_target_generates_package_and_participates_in_check() -> Result<()> {
+    let temp = fixture_project()?;
+    fs::write(temp.join("rustex.toml"), swift_fixture_config())?;
+
+    let status = Command::new(env!("CARGO_BIN_EXE_rustex"))
+        .arg("--project")
+        .arg(&temp)
+        .arg("generate")
+        .status()?;
+    assert!(status.success());
+
+    let package = fs::read_to_string(temp.join("generated/rustex/swift/Package.swift"))?;
+    assert!(package.contains("RustexRuntime"));
+    assert!(package.contains("RustexGenerated"));
+
+    let runtime = fs::read_to_string(
+        temp.join("generated/rustex/swift/Sources/RustexRuntime/RustexClient.swift"),
+    )?;
+    assert!(runtime.contains("public final class RustexClient"));
+    assert!(runtime.contains("watchWebSocketState"));
+    assert!(runtime.contains("func query<Q: RustexQuerySpec>"));
+
+    let api = fs::read_to_string(
+        temp.join("generated/rustex/swift/Sources/RustexGenerated/RustexAPI.swift"),
+    )?;
+    assert!(api.contains("public enum API"));
+    assert!(api.contains("public enum Messages"));
+    assert!(api.contains("public enum Add: RustexMutationSpec"));
+    assert!(api.contains("public static let path = \"messages:add\""));
+
+    let models = fs::read_to_string(
+        temp.join("generated/rustex/swift/Sources/RustexGenerated/RustexModels.swift"),
+    )?;
+    assert!(models.contains("public struct MessagesDoc"));
+    assert!(models.contains("@ConvexFloat"));
+    assert!(models.contains("case creationTime = \"_creationTime\""));
+
+    let check = Command::new(env!("CARGO_BIN_EXE_rustex"))
+        .arg("--project")
+        .arg(&temp)
+        .arg("check")
+        .status()?;
+    assert!(check.success());
+
+    fs::write(
+        temp.join("generated/rustex/swift/Sources/RustexGenerated/RustexAPI.swift"),
+        "stale",
+    )?;
+    let stale = Command::new(env!("CARGO_BIN_EXE_rustex"))
+        .arg("--project")
+        .arg(&temp)
+        .arg("check")
+        .status()?;
+    assert!(!stale.success());
+
+    Ok(())
+}
+
+#[test]
 fn init_scaffolds_default_config() -> Result<()> {
     let root = workspace_root();
     let temp = unique_temp_dir()?;
@@ -499,6 +558,36 @@ strict = false
 allow_inferred_returns = true
 naming_strategy = "safe"
 id_style = "newtype_per_table"
+"#
+}
+
+fn swift_fixture_config() -> &'static str {
+    r#"project_root = "."
+convex_root = "./convex"
+out_dir = "./generated/rustex"
+emit = ["swift", "manifest", "ir"]
+strict = false
+allow_inferred_returns = true
+naming_strategy = "safe"
+id_style = "newtype_per_table"
+
+[swift]
+package_name = "RustexGenerated"
+module_name = "RustexGenerated"
+product_name = "RustexGenerated"
+runtime_module_name = "RustexRuntime"
+client_facade_name = "RustexClient"
+generate_package = true
+bundle_runtime = true
+access_level = "public"
+tools_version = "5.10"
+unknown_type_strategy = "any_codable"
+emit_doc_comments = true
+convex_dependency_url = "https://github.com/get-convex/convex-swift"
+
+[swift.convex_dependency_requirement]
+kind = "from"
+version = "0.8.1"
 "#
 }
 
