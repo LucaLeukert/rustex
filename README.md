@@ -238,36 +238,36 @@ rustex --project example generate
 
 Top-level options:
 
-| Option | Meaning |
-| --- | --- |
-| `project_root` | Project root used for resolving relative paths. |
-| `convex_root` | Directory containing the Convex app. |
-| `out_dir` | Directory where Rustex writes generated outputs. |
-| `emit` | Output targets, such as `rust`, `swift`, `manifest`, `ir`, and `diagnostics`. |
-| `strict` | Treat supported diagnostics more strictly. |
+| Option                   | Meaning                                                                             |
+| ------------------------ | ----------------------------------------------------------------------------------- |
+| `project_root`           | Project root used for resolving relative paths.                                     |
+| `convex_root`            | Directory containing the Convex app.                                                |
+| `out_dir`                | Directory where Rustex writes generated outputs.                                    |
+| `emit`                   | Output targets, such as `rust`, `swift`, `manifest`, `ir`, and `diagnostics`.       |
+| `strict`                 | Treat supported diagnostics more strictly.                                          |
 | `allow_inferred_returns` | Allow TypeScript checker fallback when a function has no explicit return validator. |
-| `naming_strategy` | Naming policy for generated symbols. |
-| `id_style` | ID generation policy. |
-| `custom_derives` | Additional derives for generated Rust types. |
-| `custom_attributes` | Additional attributes for generated Rust types. |
+| `naming_strategy`        | Naming policy for generated symbols.                                                |
+| `id_style`               | ID generation policy.                                                               |
+| `custom_derives`         | Additional derives for generated Rust types.                                        |
+| `custom_attributes`      | Additional attributes for generated Rust types.                                     |
 
 Swift options:
 
-| Option | Default |
-| --- | --- |
-| `package_name` | `RustexGenerated` |
-| `module_name` | `RustexGenerated` |
-| `product_name` | `RustexGenerated` |
-| `runtime_module_name` | `RustexRuntime` |
-| `client_facade_name` | `RustexClient` |
-| `generate_package` | `true` |
-| `bundle_runtime` | `true` |
-| `access_level` | `public` |
-| `tools_version` | `5.10` |
-| `unknown_type_strategy` | `any_codable` |
-| `emit_doc_comments` | `true` |
-| `convex_dependency_url` | `https://github.com/get-convex/convex-swift` |
-| `convex_dependency_requirement` | `{ kind = "from", version = "0.8.1" }` |
+| Option                          | Default                                      |
+| ------------------------------- | -------------------------------------------- |
+| `package_name`                  | `RustexGenerated`                            |
+| `module_name`                   | `RustexGenerated`                            |
+| `product_name`                  | `RustexGenerated`                            |
+| `runtime_module_name`           | `RustexRuntime`                              |
+| `client_facade_name`            | `RustexClient`                               |
+| `generate_package`              | `true`                                       |
+| `bundle_runtime`                | `true`                                       |
+| `access_level`                  | `public`                                     |
+| `tools_version`                 | `5.10`                                       |
+| `unknown_type_strategy`         | `any_codable`                                |
+| `emit_doc_comments`             | `true`                                       |
+| `convex_dependency_url`         | `https://github.com/get-convex/convex-swift` |
+| `convex_dependency_requirement` | `from: 0.8.1`                                |
 
 `bundle_runtime = true` is the default so generated Swift output is buildable as
 a standalone Swift package without publishing a separate Rustex Swift runtime.
@@ -277,22 +277,22 @@ a standalone Swift package without publishing a separate Rustex Swift runtime.
 Rustex is validator-first: explicit Convex validators are the source of truth
 for generated contracts. Common mappings include:
 
-| Convex validator | Rust | Swift |
-| --- | --- | --- |
-| `v.string()` | `String` | `String` |
-| `v.number()` | `f64` | `Double` |
-| `v.int64()` | `i64` | `Int64` with Convex wrappers on decoded fields |
-| `v.boolean()` | `bool` | `Bool` |
-| `v.null()` | `()` or unit-like support types | `RustexNull` or `RustexVoid` |
-| `v.bytes()` | `Vec<u8>` | `Data` |
-| `v.any()` | `serde_json::Value` | `AnyCodable` |
-| `v.id("table")` | `TableId` | `TableId` |
-| `v.array(T)` | `Vec<T>` | `[T]` |
-| `v.record(v.string(), T)` | `BTreeMap<String, T>` | `[String: T]` |
-| `v.object({...})` | generated `struct` | generated `struct` |
-| `v.optional(T)` | `Option<T>` | `T?` |
-| string literal union | generated enum | raw-value enum |
-| discriminated object union | generated enum | custom `Codable` enum |
+| Convex validator           | Rust                  | Swift                        |
+| -------------------------- | --------------------- | ---------------------------- |
+| `v.string()`               | `String`              | `String`                     |
+| `v.number()`               | `f64`                 | `Double`                     |
+| `v.int64()`                | `i64`                 | `Int64`                      |
+| `v.boolean()`              | `bool`                | `Bool`                       |
+| `v.null()`                 | unit-like type        | `RustexNull` or `RustexVoid` |
+| `v.bytes()`                | `Vec<u8>`             | `Data`                       |
+| `v.any()`                  | `serde_json::Value`   | `AnyCodable`                 |
+| `v.id("table")`            | `TableId`             | `TableId`                    |
+| `v.array(T)`               | `Vec<T>`              | `[T]`                        |
+| `v.record(v.string(), T)`  | `BTreeMap<String, T>` | `[String: T]`                |
+| `v.object({...})`          | generated `struct`    | generated `struct`           |
+| `v.optional(T)`            | `Option<T>`           | `T?`                         |
+| string literal union       | generated enum        | raw-value enum               |
+| discriminated object union | generated enum        | custom `Codable` enum        |
 
 Unsupported mixed unions and unknown shapes fall back to explicit untyped values.
 
@@ -359,4 +359,3 @@ pnpm run check
 - Some recursive or highly dynamic validator shapes still fall back to untyped values.
 - Generated metadata from `convex/_generated/*.d.ts` is used for topology and corroboration, not full semantic replacement.
 - Runtime type safety is only as strong as the contracts Rustex can recover.
-
