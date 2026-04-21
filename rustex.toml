@@ -1,7 +1,7 @@
 project_root = "."
 convex_root = "example/convex"
 out_dir = "example/convex/_rustex"
-emit = ["rust", "diagnostics", "ir"]
+emit = ["rust", "swift", "diagnostics", "ir"]
 strict = false
 allow_inferred_returns = true
 naming_strategy = "safe"

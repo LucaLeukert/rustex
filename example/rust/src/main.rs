@@ -48,7 +48,9 @@ async fn main() -> Result<()> {
 }
 
 fn load_example_env() {
-    let env_path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(".env.local");
+    let env_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("..")
+        .join(".env.local");
     let _ = dotenvy::from_path(&env_path);
     debug!(env_path = %env_path.display(), "loaded example environment file if present");
 }

@@ -1,10 +1,12 @@
 project_root = "."
 convex_root = "./convex"
-out_dir = "./generated/rustex"
+out_dir = "./convex/_rustex"
 emit = [
     "rust",
+    "swift",
     "manifest",
     "ir",
+    "diagnostics",
 ]
 strict = false
 allow_inferred_returns = true

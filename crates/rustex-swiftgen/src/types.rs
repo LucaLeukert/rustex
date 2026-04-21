@@ -419,7 +419,7 @@ fn render_table(table: &Table, generator: &mut TypeGenerator) {
 
 fn prelude(config: &SwiftTargetConfig) -> String {
     format!(
-        "import ConvexMobile\nimport Foundation\nimport {}\n\n",
+        "import ConvexMobile\nimport Foundation\n@_exported import {}\n\n",
         config.runtime_module_name
     )
 }

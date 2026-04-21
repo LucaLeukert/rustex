@@ -37,6 +37,30 @@ public struct RustexNoArgs: Codable, Equatable, RustexConvexArgs {
     [:]
   }
 }
+
+public struct RustexQueryCall<Q: RustexQuerySpec> {
+  public let args: Q.Args
+
+  public init(args: Q.Args) {
+    self.args = args
+  }
+}
+
+public struct RustexMutationCall<M: RustexMutationSpec> {
+  public let args: M.Args
+
+  public init(args: M.Args) {
+    self.args = args
+  }
+}
+
+public struct RustexActionCall<A: RustexActionSpec> {
+  public let args: A.Args
+
+  public init(args: A.Args) {
+    self.args = args
+  }
+}
 "#
     .into()
 }
@@ -287,6 +311,10 @@ public final class {client} {{
     try await self.query(query, args: RustexNoArgs())
   }}
 
+  public func query<Q: RustexQuerySpec>(_ call: RustexQueryCall<Q>) async throws -> Q.Output {{
+    try await self.query(Q.self, args: call.args)
+  }}
+
   public func subscribe<Q: RustexQuerySpec>(
     _ query: Q.Type,
     args: Q.Args
@@ -304,6 +332,10 @@ public final class {client} {{
   public func subscribe<Q: RustexQuerySpec>(_ query: Q.Type) -> AnyPublisher<Q.Output, RustexRuntimeError>
   where Q.Args == RustexNoArgs {{
     subscribe(query, args: RustexNoArgs())
+  }}
+
+  public func subscribe<Q: RustexQuerySpec>(_ call: RustexQueryCall<Q>) -> AnyPublisher<Q.Output, RustexRuntimeError> {{
+    subscribe(Q.self, args: call.args)
   }}
 
   public func mutation<M: RustexMutationSpec>(
@@ -330,6 +362,10 @@ public final class {client} {{
     try await self.mutation(mutation, args: RustexNoArgs())
   }}
 
+  public func mutation<M: RustexMutationSpec>(_ call: RustexMutationCall<M>) async throws -> M.Output {{
+    try await self.mutation(M.self, args: call.args)
+  }}
+
   public func mutation<M: RustexMutationSpec>(
     _ mutation: M.Type,
     args: M.Args
@@ -348,6 +384,11 @@ public final class {client} {{
     }} catch {{
       throw RustexRuntimeError.decodingFailed(String(describing: error))
     }}
+  }}
+
+  public func mutation<M: RustexMutationSpec>(_ call: RustexMutationCall<M>) async throws
+  where M.Output == RustexVoid {{
+    try await self.mutation(M.self, args: call.args)
   }}
 
   public func action<A: RustexActionSpec>(
@@ -374,6 +415,10 @@ public final class {client} {{
     try await self.action(action, args: RustexNoArgs())
   }}
 
+  public func action<A: RustexActionSpec>(_ call: RustexActionCall<A>) async throws -> A.Output {{
+    try await self.action(A.self, args: call.args)
+  }}
+
   public func action<A: RustexActionSpec>(
     _ action: A.Type,
     args: A.Args
@@ -392,6 +437,11 @@ public final class {client} {{
     }} catch {{
       throw RustexRuntimeError.decodingFailed(String(describing: error))
     }}
+  }}
+
+  public func action<A: RustexActionSpec>(_ call: RustexActionCall<A>) async throws
+  where A.Output == RustexVoid {{
+    try await self.action(A.self, args: call.args)
   }}
 
   public func watchWebSocketState() -> AnyPublisher<WebSocketState, Never> {{

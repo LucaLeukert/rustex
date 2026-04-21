@@ -1,9 +1,9 @@
 #![allow(unused_imports)]
+use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 use crate::ids::*;
 use crate::models::*;
 use rustex_runtime::{ActionSpec, FunctionSpec, MutationSpec, QuerySpec};
-use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
 
 pub mod messages {
     use super::*;
@@ -18,18 +18,18 @@ pub mod messages {
 
     #[derive(Clone, Copy, Debug, Default)]
     pub struct Add;
-
+    
     pub fn add() -> Add {
         Add
     }
-
+    
     impl FunctionSpec for Add {
         type Args = AddArgs;
         type Output = AddResponse;
         const PATH: &'static str = "messages:add";
     }
     impl MutationSpec for Add {}
-
+    
     pub type CollectArgs = ();
 
     #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
@@ -46,17 +46,18 @@ pub mod messages {
 
     #[derive(Clone, Copy, Debug, Default)]
     pub struct Collect;
-
+    
     pub fn collect() -> Collect {
         Collect
     }
-
+    
     impl FunctionSpec for Collect {
         type Args = CollectArgs;
         type Output = CollectResponse;
         const PATH: &'static str = "messages:collect";
     }
     impl QuerySpec for Collect {}
+    
 }
 
 #[doc(hidden)]
@@ -105,3 +106,4 @@ macro_rules! subscribe {
         $client.subscribe($crate::api::messages::collect(), &())
     };
 }
+

@@ -11,7 +11,7 @@ members = [
   "crates/rustex-swiftgen",
   "crates/rustex-output",
   "crates/rustex-testkit",
-  "example",
+  "example/rust",
 ]
 resolver = "2"
 
