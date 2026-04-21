@@ -239,7 +239,7 @@ rustex --project example generate
 Top-level options:
 
 | Option                   | Meaning                                                                             |
-| ------------------------ | ----------------------------------------------------------------------------------- |
+|--------------------------|-------------------------------------------------------------------------------------|
 | `project_root`           | Project root used for resolving relative paths.                                     |
 | `convex_root`            | Directory containing the Convex app.                                                |
 | `out_dir`                | Directory where Rustex writes generated outputs.                                    |
@@ -254,7 +254,7 @@ Top-level options:
 Swift options:
 
 | Option                          | Default                                      |
-| ------------------------------- | -------------------------------------------- |
+|---------------------------------|----------------------------------------------|
 | `package_name`                  | `RustexGenerated`                            |
 | `module_name`                   | `RustexGenerated`                            |
 | `product_name`                  | `RustexGenerated`                            |
@@ -278,7 +278,7 @@ Rustex is validator-first: explicit Convex validators are the source of truth
 for generated contracts. Common mappings include:
 
 | Convex validator           | Rust                  | Swift                        |
-| -------------------------- | --------------------- | ---------------------------- |
+|----------------------------|-----------------------|------------------------------|
 | `v.string()`               | `String`              | `String`                     |
 | `v.number()`               | `f64`                 | `Double`                     |
 | `v.int64()`                | `i64`                 | `Int64`                      |
